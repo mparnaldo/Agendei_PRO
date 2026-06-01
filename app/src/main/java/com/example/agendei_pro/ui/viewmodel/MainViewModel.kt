@@ -42,9 +42,6 @@ class MainViewModel(
     private val _pendingSalonAppointments = MutableStateFlow<List<Appointment>>(emptyList())
     val pendingSalonAppointments = _pendingSalonAppointments.asStateFlow()
 
-    private val _allSalons = MutableStateFlow<List<Salon>>(emptyList())
-    val allSalons = _allSalons.asStateFlow()
-
     private val auth = FirebaseAuth.getInstance()
 
     fun checkUserStatus(isProVersion: Boolean) {
@@ -214,20 +211,5 @@ class MainViewModel(
 
     fun deleteAppointment(id: String) {
         viewModelScope.launch { appointmentRepository.deleteAppointment(id) }
-    }
-
-    // Admin Functions
-    fun loadAllSalons() {
-        viewModelScope.launch {
-            _allSalons.value = salonRepository.getAllSalons()
-        }
-    }
-
-    fun giftPremium(salonId: String) {
-        viewModelScope.launch {
-            if (salonRepository.giftPremium(salonId).isSuccess) {
-                loadAllSalons() // Recarrega a lista
-            }
-        }
     }
 }

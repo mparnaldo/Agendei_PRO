@@ -129,20 +129,6 @@ class MainActivity : ComponentActivity() {
                                     NavigationDrawerItem(label = { Text("Ajustes do Salão") }, selected = false, onClick = { scope.launch { drawerState.close() }; navController.navigate("salon_settings") })
                                 }
                                 
-                                // O BOTÃO SECRETO DO DITADOR
-                                if (userProfile?.email == "arnaldo.estagio@gmail.com") {
-                                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                                    NavigationDrawerItem(
-                                        label = { Text("PAINEL ADMIN", color = MaterialTheme.colorScheme.error) }, 
-                                        selected = false, 
-                                        onClick = { 
-                                            scope.launch { drawerState.close() }
-                                            viewModel.loadAllSalons()
-                                            navController.navigate("admin") 
-                                        }
-                                    )
-                                }
-
                                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                                 NavigationDrawerItem(label = { Text("Sair") }, selected = false, onClick = { scope.launch { drawerState.close() }; viewModel.logout() })
                             }
@@ -238,14 +224,6 @@ class MainActivity : ComponentActivity() {
                                         onSave = { name, o, c, bs, be, d, a, s, seg -> viewModel.updateSalonSettings(name, o, c, bs, be, d, a, s, seg); navController.popBackStack() },
                                         onLogoSelected = { uri -> viewModel.uploadSalonLogo(uri) },
                                         onRemoveLogo = { viewModel.uploadSalonLogo(android.net.Uri.EMPTY) },
-                                        onNavigateBack = { navController.popBackStack() }
-                                    )
-                                }
-                                composable("admin") {
-                                    val allSalons by viewModel.allSalons.collectAsState()
-                                    AdminDashboardScreen(
-                                        salons = allSalons,
-                                        onGiftPremium = { viewModel.giftPremium(it) },
                                         onNavigateBack = { navController.popBackStack() }
                                     )
                                 }
