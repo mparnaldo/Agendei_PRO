@@ -1,0 +1,29 @@
+# Android
+*.iml
+.gradle
+/local.properties
+/.idea/
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+*.apk
+*.ap_
+*.dex
+*.class
+
+# Firebase
+.firebase/
+firebase-debug.log*
+.firebaserc
+
+# Node (Functions)
+functions/node_modules/
+functions/.runtimeconfig.json
+functions/lib/
+
+# Outros
+.DS_Store
+*.swp
+*~
