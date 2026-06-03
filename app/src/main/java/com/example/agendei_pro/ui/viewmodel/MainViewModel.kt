@@ -42,7 +42,11 @@ class MainViewModel(
     private val _pendingSalonAppointments = MutableStateFlow<List<Appointment>>(emptyList())
     val pendingSalonAppointments = _pendingSalonAppointments.asStateFlow()
 
+    private val _subscriptionPrice = MutableStateFlow("49,90")
+    val subscriptionPrice = _subscriptionPrice.asStateFlow()
+
     private val auth = FirebaseAuth.getInstance()
+    private val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
 
     fun checkUserStatus(isProVersion: Boolean) {
         viewModelScope.launch {
@@ -50,6 +54,7 @@ class MainViewModel(
             if (user == null) {
                 _authState.value = AuthState.Unauthenticated
             } else {
+                fetchSubscriptionPrice()
                 _userProfile.value = profileRepository.getProfile()
                 // Atualiza o token do FCM sempre que checa o status
                 FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
@@ -211,5 +216,12 @@ class MainViewModel(
 
     fun deleteAppointment(id: String) {
         viewModelScope.launch { appointmentRepository.deleteAppointment(id) }
+    }
+
+    private fun fetchSubscriptionPrice() {
+        db.collection("config").document("pricing").get().addOnSuccessListener { doc ->
+            val price = doc.getString("value")
+            if (price != null) _subscriptionPrice.value = price
+        }
     }
 }

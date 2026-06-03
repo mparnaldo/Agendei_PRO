@@ -22,3 +22,4 @@ dependencyResolutionManagement {
 rootProject.name = "Agendei_PRO"
 include(":app")
 include(":admin")
+include(":core")

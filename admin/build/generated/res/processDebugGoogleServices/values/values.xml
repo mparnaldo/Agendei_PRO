@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="default_web_client_id" translatable="false">197290066334-dluukbech13m9d4tlaop9ao2e9n9hse4.apps.googleusercontent.com</string>
+    <string name="gcm_defaultSenderId" translatable="false">197290066334</string>
+    <string name="google_api_key" translatable="false">AIzaSyCmqZ0HUAz0nnIz5rv8Z3vq2Tclae7b0Vk</string>
+    <string name="google_app_id" translatable="false">1:197290066334:android:a560e1eb646c92b7e4168f</string>
+    <string name="google_crash_reporting_api_key" translatable="false">AIzaSyCmqZ0HUAz0nnIz5rv8Z3vq2Tclae7b0Vk</string>
+    <string name="google_storage_bucket" translatable="false">agendeipro-33d2d.firebasestorage.app</string>
+    <string name="project_id" translatable="false">agendeipro-33d2d</string>
+</resources>

@@ -144,11 +144,15 @@ class MainActivity : ComponentActivity() {
                                             onNavigateToRegister = { scope.launch { AuthManager(navController.context).signInWithGoogle().onSuccess { viewModel.checkUserStatus(isProVersion) } } }
                                         )
                                         is AuthState.AuthenticatedNoSalon -> RegisterSalonScreen { n, a, p, s -> viewModel.registerSalon(n, a, p, s) }
-                                        is AuthState.TrialExpired -> SubscriptionScreen(
-                                            salonName = state.salon.name,
-                                            onSubscribe = { /* Integrar com Billing depois */ },
-                                            onLogout = { viewModel.logout() }
-                                        )
+                                        is AuthState.TrialExpired -> {
+                                            val price by viewModel.subscriptionPrice.collectAsState()
+                                            SubscriptionScreen(
+                                                salonName = state.salon.name,
+                                                price = price,
+                                                onSubscribe = { /* Integrar com Billing depois */ },
+                                                onLogout = { viewModel.logout() }
+                                            )
+                                        }
                                         is AuthState.AuthenticatedWithSalon -> DashboardScreen(
                                             salonName = state.salon.name,
                                             salonCode = state.salon.code,

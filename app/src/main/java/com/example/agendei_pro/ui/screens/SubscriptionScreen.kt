@@ -20,6 +20,7 @@ import com.example.agendei_pro.ui.theme.Agendei_PROTheme
 @Composable
 fun SubscriptionScreen(
     salonName: String,
+    price: String = "49,90",
     onSubscribe: () -> Unit,
     onLogout: () -> Unit
 ) {
@@ -77,7 +78,7 @@ fun SubscriptionScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     Text(
-                        text = "R$ 49,90 / mês",
+                        text = "R$ $price / mês",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.ExtraBold,
                         modifier = Modifier.fillMaxWidth(),

@@ -7,6 +7,43 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:197290066334:android:a560e1eb646c92b7e4168f",
+        "android_client_info": {
+          "package_name": "com.example.agendei_admin"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "197290066334-gqvpfi4dt5sach6ddgbglc1tpnhdqht7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.agendei_admin",
+            "certificate_hash": "7ceb1ff6366e10882e6f1be150fddd101475febe"
+          }
+        },
+        {
+          "client_id": "197290066334-dluukbech13m9d4tlaop9ao2e9n9hse4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCmqZ0HUAz0nnIz5rv8Z3vq2Tclae7b0Vk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "197290066334-dluukbech13m9d4tlaop9ao2e9n9hse4.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:197290066334:android:7e80b67dd6aab398e4168f",
         "android_client_info": {
           "package_name": "com.example.agendei_pro"

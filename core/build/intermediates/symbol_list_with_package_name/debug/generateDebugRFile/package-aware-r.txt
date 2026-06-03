@@ -1,0 +1,1 @@
+com.example.agendei_pro.core
