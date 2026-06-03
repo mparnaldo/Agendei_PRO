@@ -1,5 +1,6 @@
 package com.example.agendei_pro.core.model
 
+import com.google.firebase.firestore.PropertyName
 import com.google.firebase.firestore.ServerTimestamp
 import java.util.Date
 
@@ -12,6 +13,8 @@ data class Salon(
     val phoneNumber: String = "",
     @ServerTimestamp
     val trialStartDate: Date? = null,
+    @get:PropertyName("isSubscribed")
+    @field:PropertyName("isSubscribed")
     val isSubscribed: Boolean = false,
     val openingTime: String = "08:00",
     val closingTime: String = "18:00",

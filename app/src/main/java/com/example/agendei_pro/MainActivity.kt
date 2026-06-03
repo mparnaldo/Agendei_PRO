@@ -50,6 +50,24 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
         }
+
+        // Criar canal de notificações no início para que o FCM possa exibir as notificações em background
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channelId = "agendamentos_channel"
+            val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            val channel = NotificationChannel(
+                channelId,
+                "Notificações de Agendamentos",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Notificações de novos agendamentos e confirmações"
+                enableLights(true)
+                enableVibration(true)
+                setSound(defaultSoundUri, Notification.AUDIO_ATTRIBUTES_DEFAULT)
+            }
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
         
         setContent {
             val viewModel: MainViewModel = viewModel()

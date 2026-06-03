@@ -1,5 +1,6 @@
 package com.example.agendei_admin.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.agendei_pro.core.model.Salon
@@ -31,13 +33,17 @@ fun AdminSalonsScreen(onBack: () -> Unit) {
     var userProfiles by remember { mutableStateOf<Map<String, UserProfile>>(emptyMap()) }
     val db = FirebaseFirestore.getInstance()
     val salonRepo = remember { SalonRepository() }
+    val context = LocalContext.current
 
     LaunchedEffect(Unit) {
+        // Buscamos os documentos e mapeamos o ID manualmente para garantir que nunca falhe
         db.collection("salons").addSnapshotListener { snapshot, _ ->
-            val list = snapshot?.toObjects(Salon::class.java) ?: emptyList()
+            val list = snapshot?.documents?.mapNotNull { doc ->
+                val s = doc.toObject(Salon::class.java)
+                s?.copy(id = doc.id) // GARANTE QUE O ID É O DO DOCUMENTO! 🎯
+            } ?: emptyList()
             salons = list
             
-            // Busca e-mails dos donos
             list.forEach { salon ->
                 db.collection("profiles").document(salon.ownerUid).get().addOnSuccessListener { doc ->
                     val profile = doc.toObject(UserProfile::class.java)
@@ -58,7 +64,7 @@ fun AdminSalonsScreen(onBack: () -> Unit) {
         }
     ) { padding ->
         LazyColumn(modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp)) {
-            items(salons) { salon ->
+            items(salons, key = { it.id }) { salon ->
                 val ownerProfile = userProfiles[salon.ownerUid]
                 val remainingDays = salonRepo.getRemainingTrialDays(salon)
                 
@@ -67,7 +73,17 @@ fun AdminSalonsScreen(onBack: () -> Unit) {
                     ownerEmail = ownerProfile?.email ?: "Carregando...",
                     remainingDays = remainingDays,
                     onTogglePremium = {
-                        db.collection("salons").document(salon.id).update("isSubscribed", !salon.isSubscribed)
+                        val newState = !salon.isSubscribed
+                        // USAMOS O ID GARANTIDO AQUI!
+                        db.collection("salons").document(salon.id)
+                            .update("isSubscribed", newState)
+                            .addOnSuccessListener {
+                                val msg = if (newState) "Premium ATIVADO!" else "Premium REMOVIDO!"
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            }
+                            .addOnFailureListener { e ->
+                                Toast.makeText(context, "ERRO: ${e.message}", Toast.LENGTH_LONG).show()
+                            }
                     }
                 )
             }
@@ -134,7 +150,12 @@ fun SalonDetailCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                TextButton(onClick = onTogglePremium) {
+                Button(
+                    onClick = onTogglePremium,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (salon.isSubscribed) Color(0xFFE91E63) else Color(0xFF4CAF50)
+                    )
+                ) {
                     Icon(Icons.Default.CardGiftcard, null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(if (salon.isSubscribed) "Remover Premium" else "Dar Premium Vitalício")

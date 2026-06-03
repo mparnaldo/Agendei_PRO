@@ -47,6 +47,7 @@ class MainViewModel(
 
     private val auth = FirebaseAuth.getInstance()
     private val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+    private var salonListener: com.google.firebase.firestore.ListenerRegistration? = null
 
     fun checkUserStatus(isProVersion: Boolean) {
         viewModelScope.launch {
@@ -56,7 +57,7 @@ class MainViewModel(
             } else {
                 fetchSubscriptionPrice()
                 _userProfile.value = profileRepository.getProfile()
-                // Atualiza o token do FCM sempre que checa o status
+                
                 FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
                     if (task.isSuccessful) {
                         viewModelScope.launch {
@@ -64,34 +65,49 @@ class MainViewModel(
                         }
                     }
                 }
+
                 if (isProVersion) {
-                    val salon = salonRepository.getSalon()
-                    if (salon == null) {
-                        _authState.value = AuthState.AuthenticatedNoSalon
-                    } else {
-                        val daysRemaining = salonRepository.getRemainingTrialDays(salon)
-                        if (daysRemaining <= 0 && !salon.isSubscribed) {
-                            _authState.value = AuthState.TrialExpired(salon)
-                        } else {
-                            _authState.value = AuthState.AuthenticatedWithSalon(salon, daysRemaining)
-                            loadSalonPendingAppointments(salon.id)
-                        }
-                    }
+                    observeSalonStatus(user.uid)
                 } else {
-                    val bindings = clientRepository.getMyBindings()
-                    if (bindings.isEmpty()) {
-                        _authState.value = AuthState.AuthenticatedNoBindings
-                    } else {
-                        val updatedBindings = bindings.map { binding ->
-                            val latestSalon = salonRepository.getSalonById(binding.salonId)
-                            if (latestSalon != null) {
-                                binding.copy(salonName = latestSalon.name, salonLogoUrl = latestSalon.logoUrl, salonLogoShape = latestSalon.logoShape)
-                            } else binding
-                        }
-                        _authState.value = AuthState.AuthenticatedClient(updatedBindings)
-                        loadClientAppointments()
-                    }
+                    loadClientStatus(user.uid)
                 }
+            }
+        }
+    }
+
+    private fun observeSalonStatus(userId: String) {
+        salonListener?.remove()
+        salonListener = db.collection("salons").document(userId).addSnapshotListener { snapshot, error ->
+            if (error != null) return@addSnapshotListener
+            val salon = snapshot?.toObject(Salon::class.java)
+            if (salon == null) {
+                _authState.value = AuthState.AuthenticatedNoSalon
+            } else {
+                val daysRemaining = salonRepository.getRemainingTrialDays(salon)
+                if (daysRemaining <= 0 && !salon.isSubscribed) {
+                    _authState.value = AuthState.TrialExpired(salon)
+                } else {
+                    _authState.value = AuthState.AuthenticatedWithSalon(salon, daysRemaining)
+                    loadSalonPendingAppointments(salon.id)
+                }
+            }
+        }
+    }
+
+    private fun loadClientStatus(userId: String) {
+        viewModelScope.launch {
+            val bindings = clientRepository.getMyBindings()
+            if (bindings.isEmpty()) {
+                _authState.value = AuthState.AuthenticatedNoBindings
+            } else {
+                val updatedBindings = bindings.map { binding ->
+                    val latestSalon = salonRepository.getSalonById(binding.salonId)
+                    if (latestSalon != null) {
+                        binding.copy(salonName = latestSalon.name, salonLogoUrl = latestSalon.logoUrl, salonLogoShape = latestSalon.logoShape)
+                    } else binding
+                }
+                _authState.value = AuthState.AuthenticatedClient(updatedBindings)
+                loadClientAppointments()
             }
         }
     }
@@ -216,6 +232,11 @@ class MainViewModel(
 
     fun deleteAppointment(id: String) {
         viewModelScope.launch { appointmentRepository.deleteAppointment(id) }
+    }
+
+    override fun onCleared() {
+        salonListener?.remove()
+        super.onCleared()
     }
 
     private fun fetchSubscriptionPrice() {
