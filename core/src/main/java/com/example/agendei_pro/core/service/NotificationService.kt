@@ -109,12 +109,14 @@ class NotificationService : Service() {
                         seenAppointmentIds.addAll(currentIds)
                         initialLoad = false
                     } else {
-                        val newAppts = currentAppts.filter { it.id !in seenAppointmentIds && it.status == "PENDING" }
+                        val newAppts = currentAppts.filter { it.id !in seenAppointmentIds }
                         for (appt in newAppts) {
-                            showNotification(
-                                "Novo Agendamento 📅",
-                                "${appt.clientName} agendou ${appt.serviceName}"
-                            )
+                            val isConfirmed = appt.status == "CONFIRMED"
+                            val title = if (isConfirmed) "Agendamento Automático ✅" else "Novo Agendamento 📅"
+                            val body = if (isConfirmed) 
+                                "${appt.clientName} agendou ${appt.serviceName} (Confirmado)" 
+                                else "${appt.clientName} agendou ${appt.serviceName}"
+                            showNotification(title, body)
                         }
                         seenAppointmentIds.clear()
                         seenAppointmentIds.addAll(currentIds)
@@ -138,7 +140,11 @@ class NotificationService : Service() {
                     } else {
                         for (appt in currentAppts) {
                             val prevStatus = appointmentStatuses[appt.id]
-                            if (prevStatus != null && prevStatus != "CONFIRMED" && appt.status == "CONFIRMED") {
+                            if (prevStatus == null) {
+                                if (appt.status == "CONFIRMED") {
+                                    fetchSalonNameAndNotify(appt)
+                                }
+                            } else if (prevStatus != "CONFIRMED" && appt.status == "CONFIRMED") {
                                 fetchSalonNameAndNotify(appt)
                             }
                             appointmentStatuses[appt.id] = appt.status

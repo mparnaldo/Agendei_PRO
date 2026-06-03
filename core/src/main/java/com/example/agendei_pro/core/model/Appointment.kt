@@ -12,5 +12,6 @@ data class Appointment(
     val serviceName: String = "",
     @ServerTimestamp
     val date: Date? = null,
-    val status: String = "PENDING"
+    val status: String = "PENDING",
+    val servicePrice: Double = 0.0
 )

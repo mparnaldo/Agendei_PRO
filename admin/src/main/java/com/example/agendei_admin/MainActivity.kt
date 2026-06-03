@@ -34,12 +34,16 @@ class MainActivity : ComponentActivity() {
                                 AdminDashboardScreen(
                                     onNavigateToSalons = { navController.navigate("salons") },
                                     onNavigateToClients = { navController.navigate("clients") },
-                                    onNavigateToSettings = { navController.navigate("settings") }
+                                    onNavigateToSettings = { navController.navigate("settings") },
+                                    onNavigateToMetrics = { navController.navigate("metrics") },
+                                    onNavigateToBroadcast = { navController.navigate("broadcast") }
                                 ) 
                             }
                             composable("salons") { AdminSalonsScreen(onBack = { navController.popBackStack() }) }
                             composable("clients") { AdminClientsScreen(onBack = { navController.popBackStack() }) }
                             composable("settings") { AdminSettingsScreen(onBack = { navController.popBackStack() }) }
+                            composable("metrics") { AdminMetricsScreen(onBack = { navController.popBackStack() }) }
+                            composable("broadcast") { AdminBroadcastScreen(onBack = { navController.popBackStack() }) }
                         }
                     }
                 }

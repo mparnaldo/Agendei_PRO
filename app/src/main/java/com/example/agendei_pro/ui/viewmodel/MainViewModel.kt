@@ -18,7 +18,12 @@ sealed class AuthState {
     object AuthenticatedNoBindings : AuthState()
     data class TrialExpired(val salon: Salon) : AuthState()
     data class AuthenticatedWithSalon(val salon: Salon, val daysRemaining: Int) : AuthState()
-    data class AuthenticatedClient(val bindings: List<UserBinding>) : AuthState()
+    data class AuthenticatedClient(
+        val bindings: List<UserBinding>,
+        val latestSalon: Salon?,
+        val completedCount: Int,
+        val lastCompletedAppointment: Appointment?
+    ) : AuthState()
 }
 
 class MainViewModel(
@@ -49,6 +54,18 @@ class MainViewModel(
     private val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
     private var salonListener: com.google.firebase.firestore.ListenerRegistration? = null
 
+    private val _globalAnnouncement = MutableStateFlow<Announcement?>(null)
+    val globalAnnouncement = _globalAnnouncement.asStateFlow()
+
+    private val _salonAnnouncement = MutableStateFlow<Announcement?>(null)
+    val salonAnnouncement = _salonAnnouncement.asStateFlow()
+
+    private var announcementListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var salonAnnouncementListener: com.google.firebase.firestore.ListenerRegistration? = null
+
+    init {
+    }
+
     fun checkUserStatus(isProVersion: Boolean) {
         viewModelScope.launch {
             val user = auth.currentUser
@@ -66,9 +83,23 @@ class MainViewModel(
                     }
                 }
 
+                announcementListener?.remove()
+                val configDocName = if (isProVersion) "announcement_salons" else "announcement_clients"
+                announcementListener = db.collection("config").document(configDocName).addSnapshotListener { snapshot, error ->
+                    if (error == null && snapshot != null) {
+                        _globalAnnouncement.value = snapshot.toObject(Announcement::class.java)
+                    } else {
+                        _globalAnnouncement.value = null
+                    }
+                }
+
                 if (isProVersion) {
+                    FirebaseMessaging.getInstance().subscribeToTopic("salons")
+                    FirebaseMessaging.getInstance().unsubscribeFromTopic("clients")
                     observeSalonStatus(user.uid)
                 } else {
+                    FirebaseMessaging.getInstance().subscribeToTopic("clients")
+                    FirebaseMessaging.getInstance().unsubscribeFromTopic("salons")
                     loadClientStatus(user.uid)
                 }
             }
@@ -99,6 +130,8 @@ class MainViewModel(
             val bindings = clientRepository.getMyBindings()
             if (bindings.isEmpty()) {
                 _authState.value = AuthState.AuthenticatedNoBindings
+                salonAnnouncementListener?.remove()
+                _salonAnnouncement.value = null
             } else {
                 val updatedBindings = bindings.map { binding ->
                     val latestSalon = salonRepository.getSalonById(binding.salonId)
@@ -106,7 +139,46 @@ class MainViewModel(
                         binding.copy(salonName = latestSalon.name, salonLogoUrl = latestSalon.logoUrl, salonLogoShape = latestSalon.logoShape)
                     } else binding
                 }
-                _authState.value = AuthState.AuthenticatedClient(updatedBindings)
+                
+                val firstBinding = updatedBindings.firstOrNull()
+                var latestSalon: Salon? = null
+                var completedCount = 0
+                var lastCompletedAppt: Appointment? = null
+                
+                if (firstBinding != null) {
+                    FirebaseMessaging.getInstance().subscribeToTopic("salon_${firstBinding.salonId}")
+                    latestSalon = salonRepository.getSalonById(firstBinding.salonId)
+                    val history = appointmentRepository.getClientHistory(userId)
+                    val salonHistory = history.filter { it.salonId == firstBinding.salonId && it.status == "CONFIRMED" }
+                    completedCount = salonHistory.size
+                    lastCompletedAppt = salonHistory
+                        .filter {
+                            val apptDate = it.date
+                            apptDate != null && apptDate.before(java.util.Date())
+                        }
+                        .maxByOrNull { it.date?.time ?: 0L }
+
+                    salonAnnouncementListener?.remove()
+                    salonAnnouncementListener = db.collection("salons").document(firstBinding.salonId)
+                        .collection("promotions").document("active")
+                        .addSnapshotListener { snapshot, error ->
+                            if (error == null && snapshot != null) {
+                                _salonAnnouncement.value = snapshot.toObject(Announcement::class.java)
+                            } else {
+                                _salonAnnouncement.value = null
+                            }
+                        }
+                } else {
+                    salonAnnouncementListener?.remove()
+                    _salonAnnouncement.value = null
+                }
+                
+                _authState.value = AuthState.AuthenticatedClient(
+                    bindings = updatedBindings,
+                    latestSalon = latestSalon,
+                    completedCount = completedCount,
+                    lastCompletedAppointment = lastCompletedAppt
+                )
                 loadClientAppointments()
             }
         }
@@ -129,6 +201,18 @@ class MainViewModel(
     fun setTheme(theme: AgendeiTheme) { _selectedTheme.value = theme }
 
     fun logout() {
+        FirebaseMessaging.getInstance().unsubscribeFromTopic("salons")
+        FirebaseMessaging.getInstance().unsubscribeFromTopic("clients")
+        val state = _authState.value
+        if (state is AuthState.AuthenticatedClient) {
+            state.bindings.forEach {
+                FirebaseMessaging.getInstance().unsubscribeFromTopic("salon_${it.salonId}")
+            }
+        }
+        announcementListener?.remove()
+        salonAnnouncementListener?.remove()
+        _globalAnnouncement.value = null
+        _salonAnnouncement.value = null
         auth.signOut()
         _authState.value = AuthState.Unauthenticated
         _userProfile.value = null
@@ -155,6 +239,9 @@ class MainViewModel(
 
     fun unlinkCurrentSalon(salonId: String) {
         viewModelScope.launch {
+            FirebaseMessaging.getInstance().unsubscribeFromTopic("salon_$salonId")
+            salonAnnouncementListener?.remove()
+            _salonAnnouncement.value = null
             if (clientRepository.unlinkSalon(salonId).isSuccess) checkUserStatus(false)
         }
     }
@@ -180,10 +267,26 @@ class MainViewModel(
         }
     }
 
-    fun updateSalonSettings(name: String, opening: String, closing: String, breakStart: String, breakEnd: String, days: List<Int>, autoAccept: Boolean, logoShape: String, segment: String) {
+    fun updateSalonSettings(
+        name: String,
+        opening: String,
+        closing: String,
+        breakStart: String,
+        breakEnd: String,
+        days: List<Int>,
+        autoAccept: Boolean,
+        logoShape: String,
+        segment: String,
+        hasLoyalty: Boolean,
+        loyaltyRequired: Int,
+        loyaltyReward: String
+    ) {
         val state = _authState.value as? AuthState.AuthenticatedWithSalon ?: return
         viewModelScope.launch {
-            val result = salonRepository.updateSalonSettings(name, opening, closing, breakStart, breakEnd, days, autoAccept, logoShape, segment)
+            val result = salonRepository.updateSalonSettings(
+                name, opening, closing, breakStart, breakEnd, days, autoAccept, logoShape, segment,
+                hasLoyalty, loyaltyRequired, loyaltyReward
+            )
             if (result.isSuccess) {
                 val updatedSalon = state.salon.copy(
                     name = name,
@@ -194,7 +297,10 @@ class MainViewModel(
                     workingDays = days,
                     autoAccept = autoAccept,
                     logoShape = logoShape,
-                    segment = segment
+                    segment = segment,
+                    hasLoyaltyProgram = hasLoyalty,
+                    loyaltyRequiredServices = loyaltyRequired,
+                    loyaltyRewardDescription = loyaltyReward
                 )
                 _authState.value = state.copy(salon = updatedSalon)
             }
@@ -236,6 +342,8 @@ class MainViewModel(
 
     override fun onCleared() {
         salonListener?.remove()
+        announcementListener?.remove()
+        salonAnnouncementListener?.remove()
         super.onCleared()
     }
 

@@ -14,7 +14,9 @@ import androidx.compose.ui.unit.dp
 fun AdminDashboardScreen(
     onNavigateToSalons: () -> Unit,
     onNavigateToClients: () -> Unit,
-    onNavigateToSettings: () -> Unit
+    onNavigateToSettings: () -> Unit,
+    onNavigateToMetrics: () -> Unit,
+    onNavigateToBroadcast: () -> Unit
 ) {
     Scaffold(
         topBar = { TopAppBar(title = { Text("Painel de Controle Imperial") }) }
@@ -23,6 +25,10 @@ fun AdminDashboardScreen(
             AdminCard("Gerenciar Salões", "Ver trials, assinaturas e presentear", Icons.Default.Store, onNavigateToSalons)
             Spacer(modifier = Modifier.height(16.dp))
             AdminCard("Lista de Clientes", "Ver todos os usuários do app cliente", Icons.Default.People, onNavigateToClients)
+            Spacer(modifier = Modifier.height(16.dp))
+            AdminCard("Métricas & Finanças", "Acompanhar MRR, Churn, LTV e uso do sistema", Icons.Default.Analytics, onNavigateToMetrics)
+            Spacer(modifier = Modifier.height(16.dp))
+            AdminCard("Comunicado Global", "Disparar push em massa e alertas no app", Icons.Default.Campaign, onNavigateToBroadcast)
             Spacer(modifier = Modifier.height(16.dp))
             AdminCard("Ajustes Globais", "Preço da assinatura e avisos", Icons.Default.Settings, onNavigateToSettings)
         }

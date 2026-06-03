@@ -106,17 +106,21 @@ class SchedulingViewModel(
         val user = auth.currentUser ?: return
         val service = _selectedService.value ?: return
         viewModelScope.launch {
+            val salon = salonRepository.getSalonById(salonId)
+            val isAutoAccept = salon?.autoAccept ?: false
             val appt = Appointment(
                 clientName = user.displayName ?: "Cliente",
                 clientUid = user.uid,
                 salonId = salonId,
                 serviceId = service.id,
                 serviceName = service.name,
+                servicePrice = service.price,
                 date = date,
-                status = "PENDING"
+                status = if (isAutoAccept) "CONFIRMED" else "PENDING"
             )
             if (appointmentRepository.createAppointment(appt).isSuccess) {
-                _statusMessage.emit("Agendamento solicitado!")
+                val message = if (isAutoAccept) "Agendamento confirmado automaticamente!" else "Agendamento solicitado!"
+                _statusMessage.emit(message)
                 _isSuccess.value = true
             }
         }

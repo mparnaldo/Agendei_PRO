@@ -41,6 +41,7 @@ fun AgendaScreen(
     val allAppointments by viewModel.allAppointments.collectAsState()
     val selectedDate by viewModel.selectedDate.collectAsState()
     val viewMode by viewModel.viewMode.collectAsState()
+    var showBlockDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -64,6 +65,15 @@ fun AgendaScreen(
                     }
                 }
             )
+        },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = { showBlockDialog = true },
+                icon = { Icon(Icons.Default.Block, null) },
+                text = { Text("Bloquear Horário") },
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer
+            )
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
@@ -82,22 +92,75 @@ fun AgendaScreen(
                     appointments = appointments,
                     selectedDate = selectedDate,
                     title = "Agendamentos do Dia",
-                    onUpdateStatus = { id, s -> viewModel.updateStatus(id, s) }
+                    onUpdateStatus = { id, s -> viewModel.updateStatus(id, s) },
+                    onDeleteBlockage = { viewModel.deleteAppointment(it) }
                 )
             } else {
                 // Exibe a linha do tempo / lista contínua rolando
                 TimelineView(
                     allAppointments = allAppointments,
-                    onUpdateStatus = { id, s -> viewModel.updateStatus(id, s) }
+                    onUpdateStatus = { id, s -> viewModel.updateStatus(id, s) },
+                    onDeleteBlockage = { viewModel.deleteAppointment(it) }
                 )
             }
         }
+    }
+
+    if (showBlockDialog) {
+        var timeStr by remember { mutableStateOf("08:00") }
+        var reason by remember { mutableStateOf("Almoço") }
+        
+        AlertDialog(
+            onDismissRequest = { showBlockDialog = false },
+            title = { Text("Bloquear Horário") },
+            text = {
+                Column {
+                    Text("Selecione o horário para bloqueio da agenda:", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    OutlinedTextField(
+                        value = timeStr,
+                        onValueChange = { timeStr = it },
+                        label = { Text("Horário (Ex: 09:30)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    OutlinedTextField(
+                        value = reason,
+                        onValueChange = { reason = it },
+                        label = { Text("Motivo / Descrição") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.blockTimeSlot(timeStr, reason)
+                        showBlockDialog = false
+                    }
+                ) {
+                    Text("Bloquear")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBlockDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun TimelineView(allAppointments: List<Appointment>, onUpdateStatus: (String, String) -> Unit) {
+fun TimelineView(
+    allAppointments: List<Appointment>,
+    onUpdateStatus: (String, String) -> Unit,
+    onDeleteBlockage: (String) -> Unit
+) {
     val sdfGroup = SimpleDateFormat("EEEE, dd 'de' MMMM", Locale("pt", "BR"))
     val grouped = remember(allAppointments) {
         allAppointments.groupBy { appt ->
@@ -134,7 +197,7 @@ fun TimelineView(allAppointments: List<Appointment>, onUpdateStatus: (String, St
                     )
                 }
                 items(appts) { appt ->
-                    AppointmentItem(appt, onUpdateStatus)
+                    AppointmentItem(appt, onUpdateStatus, onDeleteBlockage)
                 }
             }
         }
@@ -146,7 +209,8 @@ fun AgendaListView(
     appointments: List<Appointment>,
     selectedDate: Date,
     title: String,
-    onUpdateStatus: (String, String) -> Unit
+    onUpdateStatus: (String, String) -> Unit,
+    onDeleteBlockage: (String) -> Unit
 ) {
     val sdf = SimpleDateFormat("EEEE, dd 'de' MMMM", Locale("pt", "BR"))
     Column(modifier = Modifier.fillMaxSize()) {
@@ -168,7 +232,7 @@ fun AgendaListView(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(appointments) { AppointmentItem(it, onUpdateStatus) }
+                items(appointments) { AppointmentItem(it, onUpdateStatus, onDeleteBlockage) }
             }
         }
     }
@@ -223,14 +287,25 @@ fun MonthlyCalendarView(allAppointments: List<Appointment>, selectedDate: Date, 
 }
 
 @Composable
-fun AppointmentItem(appt: Appointment, onUpdateStatus: (String, String) -> Unit) {
+fun AppointmentItem(
+    appt: Appointment,
+    onUpdateStatus: (String, String) -> Unit,
+    onDeleteBlockage: (String) -> Unit
+) {
     val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(appt.date ?: Date())
     val isPending = appt.status == "PENDING"
+    val isBlocked = appt.status == "BLOCKED"
 
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (isPending) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceVariant
+            containerColor = if (isBlocked) {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            } else if (isPending) {
+                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            }
         ),
         border = if (isPending) BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)) else null
     ) {
@@ -242,26 +317,51 @@ fun AppointmentItem(appt: Appointment, onUpdateStatus: (String, String) -> Unit)
                 text = time,
                 fontWeight = FontWeight.ExtraBold,
                 style = MaterialTheme.typography.titleLarge,
-                color = if (isPending) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (isBlocked) {
+                    MaterialTheme.colorScheme.outline
+                } else if (isPending) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
             )
             
             Spacer(Modifier.width(16.dp))
             
             Column(Modifier.weight(1f)) {
-                if (isPending) {
+                if (isBlocked) {
                     Text(
-                        text = "⚠️ Aguardando Confirmação",
-                        color = MaterialTheme.colorScheme.error,
+                        text = "🔒 Horário Bloqueado",
+                        color = MaterialTheme.colorScheme.outline,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(bottom = 2.dp)
                     )
+                    Text(appt.clientName, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.outline)
+                } else {
+                    if (isPending) {
+                        Text(
+                            text = "⚠️ Aguardando Confirmação",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 2.dp)
+                        )
+                    }
+                    Text(appt.clientName, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(appt.serviceName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
                 }
-                Text(appt.clientName, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text(appt.serviceName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
             }
             
-            if (isPending) {
+            if (isBlocked) {
+                IconButton(onClick = { onDeleteBlockage(appt.id) }) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Desbloquear Horário",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            } else if (isPending) {
                 IconButton(
                     onClick = { onUpdateStatus(appt.id, "CONFIRMED") },
                     modifier = Modifier

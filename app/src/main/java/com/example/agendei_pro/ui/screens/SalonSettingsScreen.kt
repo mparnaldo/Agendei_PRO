@@ -34,8 +34,11 @@ fun SalonSettingsScreen(
     currentLogoUrl: String?,
     currentLogoShape: String,
     currentSegment: String,
+    currentHasLoyalty: Boolean,
+    currentLoyaltyRequired: Int,
+    currentLoyaltyReward: String,
     uploadProgress: Int?,
-    onSave: (String, String, String, String, String, List<Int>, Boolean, String, String) -> Unit,
+    onSave: (String, String, String, String, String, List<Int>, Boolean, String, String, Boolean, Int, String) -> Unit,
     onLogoSelected: (Uri) -> Unit,
     onRemoveLogo: () -> Unit,
     onNavigateBack: () -> Unit
@@ -49,6 +52,9 @@ fun SalonSettingsScreen(
     var autoAccept by remember { mutableStateOf(currentAutoAccept) }
     var logoShape by remember { mutableStateOf(currentLogoShape) }
     var segment by remember { mutableStateOf(currentSegment) }
+    var hasLoyalty by remember { mutableStateOf(currentHasLoyalty) }
+    var loyaltyRequired by remember { mutableStateOf(currentLoyaltyRequired.toString()) }
+    var loyaltyReward by remember { mutableStateOf(currentLoyaltyReward) }
 
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { onLogoSelected(it) }
@@ -139,6 +145,21 @@ fun SalonSettingsScreen(
 
             Spacer(Modifier.height(16.dp))
             Card(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Aceite Automático", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("Confirmar agendamentos instantaneamente sem aprovação manual", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(checked = autoAccept, onCheckedChange = { autoAccept = it })
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Ramo de Atividade", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
@@ -155,7 +176,62 @@ fun SalonSettingsScreen(
                 }
             }
 
-            Button(onClick = { onSave(name, opening, closing, breakStart, breakEnd, selectedDays, autoAccept, logoShape, segment) }, modifier = Modifier.fillMaxWidth().padding(top = 32.dp).height(56.dp), enabled = name.isNotBlank()) {
+            Spacer(Modifier.height(16.dp))
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Programa de Fidelidade", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("Gerar cartão de fidelidade automático no aplicativo do cliente", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Switch(checked = hasLoyalty, onCheckedChange = { hasLoyalty = it })
+                    }
+
+                    if (hasLoyalty) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = loyaltyRequired,
+                            onValueChange = { loyaltyRequired = it },
+                            label = { Text("Qtd. de Serviços para Ganhar o Prêmio") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = loyaltyReward,
+                            onValueChange = { loyaltyReward = it },
+                            label = { Text("Descrição do Prêmio (Ex: Corte Grátis)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                    }
+                }
+            }
+
+            Button(
+                onClick = { 
+                    onSave(
+                        name, 
+                        opening, 
+                        closing, 
+                        breakStart, 
+                        breakEnd, 
+                        selectedDays, 
+                        autoAccept, 
+                        logoShape, 
+                        segment,
+                        hasLoyalty,
+                        loyaltyRequired.toIntOrNull() ?: 10,
+                        loyaltyReward
+                    ) 
+                }, 
+                modifier = Modifier.fillMaxWidth().padding(top = 32.dp).height(56.dp), 
+                enabled = name.isNotBlank()
+            ) {
                 Text("Salvar Todas as Configurações")
             }
         }

@@ -28,6 +28,7 @@ import java.util.*
 @Composable
 fun SchedulingScreen(
     salonId: String,
+    preselectedServiceId: String? = null,
     viewModel: SchedulingViewModel = viewModel(),
     onNavigateBack: () -> Unit,
     onSuccess: () -> Unit
@@ -52,6 +53,16 @@ fun SchedulingScreen(
     }
 
     LaunchedEffect(isSuccess) { if (isSuccess) onSuccess() }
+
+    LaunchedEffect(services, preselectedServiceId) {
+        if (!preselectedServiceId.isNullOrBlank() && services.isNotEmpty()) {
+            val matchingService = services.find { it.id == preselectedServiceId }
+            if (matchingService != null) {
+                viewModel.selectService(matchingService)
+                step = 2
+            }
+        }
+    }
 
     val categories = remember(services) {
         listOf("TODOS") + services.map { it.category }.distinct()

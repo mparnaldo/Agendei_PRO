@@ -8,6 +8,7 @@ import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.util.Calendar
 import java.util.Date
 
 enum class AgendaViewMode {
@@ -69,6 +70,40 @@ class AgendaViewModel(private val repository: AppointmentRepository = Appointmen
     fun updateStatus(appointmentId: String, status: String) {
         viewModelScope.launch {
             repository.updateAppointmentStatus(appointmentId, status)
+        }
+    }
+
+    fun deleteAppointment(id: String) {
+        viewModelScope.launch {
+            repository.deleteAppointment(id)
+        }
+    }
+
+    fun blockTimeSlot(timeStr: String, reason: String) {
+        val id = salonId ?: return
+        val date = _selectedDate.value
+        viewModelScope.launch {
+            try {
+                val timeParts = timeStr.split(":")
+                val cal = Calendar.getInstance().apply {
+                    time = date
+                    set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
+                    set(Calendar.MINUTE, timeParts[1].toInt())
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                val appt = Appointment(
+                    clientName = "Bloqueado: $reason",
+                    clientUid = "BLOCKAGE",
+                    salonId = id,
+                    serviceId = "BLOCKAGE",
+                    serviceName = "Ausência",
+                    servicePrice = 0.0,
+                    date = cal.time,
+                    status = "BLOCKED"
+                )
+                repository.createAppointment(appt)
+            } catch (e: Exception) {}
         }
     }
 }

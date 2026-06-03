@@ -32,6 +32,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import androidx.navigation.NavType
 import com.example.agendei_pro.core.auth.AuthManager
 import com.example.agendei_pro.core.service.NotificationService
 import com.example.agendei_pro.ui.screens.*
@@ -78,6 +80,7 @@ class MainActivity : ComponentActivity() {
                 val userProfile by viewModel.userProfile.collectAsState()
                 val clientAppointments by viewModel.clientAppointments.collectAsState()
                 val pendingSalonAppointments by viewModel.pendingSalonAppointments.collectAsState()
+                val globalAnnouncement by viewModel.globalAnnouncement.collectAsState()
                 val navController = rememberNavController()
                 val scope = rememberCoroutineScope()
                 val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -179,6 +182,7 @@ class MainActivity : ComponentActivity() {
                                             daysRemaining = state.daysRemaining,
                                             pendingAppointments = pendingSalonAppointments,
                                             userPhotoUrl = userProfile?.photoUrl,
+                                            globalAnnouncement = globalAnnouncement,
                                             onManageServices = { navController.navigate("services") },
                                             onViewAgenda = { navController.navigate("agenda") },
                                             onUpdateStatus = { id, s -> viewModel.updateAppointmentStatus(id, s) },
@@ -188,13 +192,25 @@ class MainActivity : ComponentActivity() {
                                         )
                                         is AuthState.AuthenticatedClient -> {
                                             val binding = state.bindings.firstOrNull() ?: return@composable
+                                            val hasLoyalty = state.latestSalon?.hasLoyaltyProgram ?: false
+                                            val loyaltyRequired = state.latestSalon?.loyaltyRequiredServices ?: 10
+                                            val loyaltyReward = state.latestSalon?.loyaltyRewardDescription ?: "Corte Grátis"
                                             ClientDashboardScreen(
                                                 salonName = binding.salonName,
                                                 salonLogoUrl = binding.salonLogoUrl,
                                                 salonLogoShape = binding.salonLogoShape,
                                                 appointments = clientAppointments,
                                                 userPhotoUrl = userProfile?.photoUrl,
+                                                hasLoyalty = hasLoyalty,
+                                                loyaltyRequired = loyaltyRequired,
+                                                loyaltyReward = loyaltyReward,
+                                                completedCount = state.completedCount,
+                                                lastCompletedAppointment = state.lastCompletedAppointment,
+                                                globalAnnouncement = globalAnnouncement,
                                                 onNewAppointment = { navController.navigate("scheduling/${binding.salonId}") },
+                                                onReorderAppointment = { appt ->
+                                                    navController.navigate("scheduling/${binding.salonId}?serviceId=${appt.serviceId}")
+                                                },
                                                 onUnlinkSalon = { viewModel.unlinkCurrentSalon(binding.salonId) },
                                                 onDeleteAppointment = { viewModel.deleteAppointment(it) },
                                                 onProfileClick = { navController.navigate("profile") },
@@ -242,16 +258,34 @@ class MainActivity : ComponentActivity() {
                                         currentLogoUrl = state?.salon?.logoUrl,
                                         currentLogoShape = state?.salon?.logoShape ?: "ROUND",
                                         currentSegment = state?.salon?.segment ?: "BARBEARIA",
+                                        currentHasLoyalty = state?.salon?.hasLoyaltyProgram ?: false,
+                                        currentLoyaltyRequired = state?.salon?.loyaltyRequiredServices ?: 10,
+                                        currentLoyaltyReward = state?.salon?.loyaltyRewardDescription ?: "Corte Grátis",
                                         uploadProgress = uploadProgress,
-                                        onSave = { name, o, c, bs, be, d, a, s, seg -> viewModel.updateSalonSettings(name, o, c, bs, be, d, a, s, seg); navController.popBackStack() },
+                                        onSave = { name, o, c, bs, be, d, a, s, seg, hl, lr, lrd -> 
+                                            viewModel.updateSalonSettings(name, o, c, bs, be, d, a, s, seg, hl, lr, lrd)
+                                            navController.popBackStack()
+                                        },
                                         onLogoSelected = { uri -> viewModel.uploadSalonLogo(uri) },
                                         onRemoveLogo = { viewModel.uploadSalonLogo(android.net.Uri.EMPTY) },
                                         onNavigateBack = { navController.popBackStack() }
                                     )
                                 }
-                                composable("scheduling/{salonId}") { backStackEntry ->
+                                composable(
+                                    route = "scheduling/{salonId}?serviceId={serviceId}",
+                                    arguments = listOf(
+                                        navArgument("salonId") { type = NavType.StringType },
+                                        navArgument("serviceId") { type = NavType.StringType; nullable = true; defaultValue = null }
+                                    )
+                                ) { backStackEntry ->
                                     val salonId = backStackEntry.arguments?.getString("salonId") ?: ""
-                                    SchedulingScreen(salonId = salonId, onNavigateBack = { navController.popBackStack() }, onSuccess = { navController.popBackStack() })
+                                    val serviceId = backStackEntry.arguments?.getString("serviceId")
+                                    SchedulingScreen(
+                                        salonId = salonId,
+                                        preselectedServiceId = serviceId,
+                                        onNavigateBack = { navController.popBackStack() },
+                                        onSuccess = { navController.popBackStack() }
+                                    )
                                 }
                             }
                         }

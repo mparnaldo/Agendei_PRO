@@ -1,9 +1,11 @@
 package com.example.agendei_pro.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -15,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.example.agendei_pro.core.model.Appointment
 import java.text.SimpleDateFormat
@@ -28,7 +31,14 @@ fun ClientDashboardScreen(
     salonLogoShape: String,
     appointments: List<Appointment>,
     userPhotoUrl: String?,
+    hasLoyalty: Boolean,
+    loyaltyRequired: Int,
+    loyaltyReward: String,
+    completedCount: Int,
+    lastCompletedAppointment: Appointment?,
+    globalAnnouncement: String? = null,
     onNewAppointment: () -> Unit,
+    onReorderAppointment: (Appointment) -> Unit,
     onUnlinkSalon: () -> Unit,
     onDeleteAppointment: (String) -> Unit,
     onProfileClick: () -> Unit,
@@ -69,6 +79,36 @@ fun ClientDashboardScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+            if (!globalAnnouncement.isNullOrBlank()) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Campaign,
+                            contentDescription = "Aviso Global",
+                            modifier = Modifier.size(28.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = globalAnnouncement,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
             
             // Header do Salão conforme solicitado 🎨
             if (salonLogoShape == "RECT" && salonLogoUrl != null) {
@@ -76,7 +116,7 @@ fun ClientDashboardScreen(
                 AsyncImage(
                     model = salonLogoUrl,
                     contentDescription = "Banner do Salão",
-                    modifier = Modifier.fillMaxWidth().height(140.dp),
+                    modifier = Modifier.fillMaxWidth().height(120.dp),
                     contentScale = ContentScale.Crop
                 )
             } else {
@@ -108,7 +148,99 @@ fun ClientDashboardScreen(
                 }
             }
 
-            Text("Meus Próximos Horários", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            // Seção de Fidelidade (Fidelômetro) 🎁
+            if (hasLoyalty) {
+                val currentStamps = completedCount % (loyaltyRequired + 1)
+                val isRewardReached = currentStamps >= loyaltyRequired
+
+                Card(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isRewardReached) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = if (isRewardReached) "Prêmio Disponível! 🎉" else "Fidelômetro 🎁",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isRewardReached) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        
+                        if (isRewardReached) {
+                            Text(
+                                text = "Você completou $loyaltyRequired atendimentos! Seu próximo serviço é GRÁTIS: $loyaltyReward. Informe ao profissional no salão.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF2E7D32)
+                            )
+                        } else {
+                            Text(
+                                text = "Acumule agendamentos e ganhe prêmios neste salão!",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            
+                            val progress = currentStamps.toFloat() / loyaltyRequired.toFloat()
+                            LinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "$currentStamps de $loyaltyRequired agendamentos para ganhar: $loyaltyReward",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Seção de Reagendamento Rápido 🔁
+            if (lastCompletedAppointment != null) {
+                Card(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Reagendar Último Serviço 🔁",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = lastCompletedAppointment.serviceName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                        Button(
+                            onClick = { onReorderAppointment(lastCompletedAppointment) },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                        ) {
+                            Icon(Icons.Default.Refresh, null)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Reagendar")
+                        }
+                    }
+                }
+            }
+
+            Text("Meus Próximos Horários", modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             
             if (appointments.isEmpty()) {
                 Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {

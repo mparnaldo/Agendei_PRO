@@ -37,6 +37,7 @@ fun DashboardScreen(
     daysRemaining: Int,
     pendingAppointments: List<Appointment>,
     userPhotoUrl: String?,
+    globalAnnouncement: String? = null,
     onManageServices: () -> Unit,
     onViewAgenda: () -> Unit,
     onUpdateStatus: (String, String) -> Unit,
@@ -74,6 +75,38 @@ fun DashboardScreen(
         }
     ) { padding ->
         LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
+            if (!globalAnnouncement.isNullOrBlank()) {
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                        ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Campaign,
+                                contentDescription = "Aviso Global",
+                                modifier = Modifier.size(28.dp),
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = globalAnnouncement,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
             // Banner ou Logo Circular 🎨
             item {
                 if (logoShape == "RECT" && logoUrl != null) {

@@ -79,6 +79,17 @@ class AppointmentRepository {
         }
     }
 
+    suspend fun getClientHistory(clientUid: String): List<Appointment> {
+        return try {
+            val snapshot = firestore.collection("appointments")
+                .whereEqualTo("clientUid", clientUid)
+                .get().await()
+            snapshot.toObjects(Appointment::class.java)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
     suspend fun updateAppointmentStatus(id: String, status: String): Result<Unit> = try {
         firestore.collection("appointments").document(id).update("status", status).await()
         Result.success(Unit)

@@ -174,7 +174,10 @@ class SalonRepository {
         days: List<Int>,
         autoAccept: Boolean,
         logoShape: String,
-        segment: String
+        segment: String,
+        hasLoyalty: Boolean,
+        loyaltyRequired: Int,
+        loyaltyReward: String
     ): Result<Unit> {
         val user = auth.currentUser ?: return Result.failure(Exception("Não logado"))
         return try {
@@ -187,7 +190,10 @@ class SalonRepository {
                 "workingDays" to days,
                 "autoAccept" to autoAccept,
                 "logoShape" to logoShape,
-                "segment" to segment
+                "segment" to segment,
+                "hasLoyaltyProgram" to hasLoyalty,
+                "loyaltyRequiredServices" to loyaltyRequired,
+                "loyaltyRewardDescription" to loyaltyReward
             )).await()
             Result.success(Unit)
         } catch (e: Exception) {
