@@ -143,8 +143,7 @@ class SchedulingViewModel(
     private fun isProAvailableForSlot(
         pro: Professional,
         slotStartCal: Calendar,
-        isToday: Boolean,
-        now: Calendar,
+        bookingLimitCal: Calendar,
         activeBookings: List<Appointment>,
         isIndividualized: Boolean,
         salon: Salon
@@ -173,7 +172,7 @@ class SchedulingViewModel(
             }
         }
 
-        if (isToday && slotStartCal.before(now)) return false
+        if (slotStartCal.before(bookingLimitCal)) return false
 
         val timeStr = String.format(Locale.US, "%02d:%02d", slotStartCal.get(Calendar.HOUR_OF_DAY), slotStartCal.get(Calendar.MINUTE))
         val isBlocked = activeBookings.any { appt ->
@@ -200,8 +199,9 @@ class SchedulingViewModel(
             val startTime = sdf.parse(salon.openingTime) ?: return emptyList()
             val endTime = sdf.parse(salon.closingTime) ?: return emptyList()
             
-            val now = Calendar.getInstance()
-            val isToday = isSameDay(selectedDate, now.time)
+            val bookingLimitCal = Calendar.getInstance().apply {
+                add(Calendar.HOUR_OF_DAY, salon.minBookingDelayHours)
+            }
             
             val activeBookings = appointments.filter { it.status == "CONFIRMED" || it.status == "PENDING" || it.status == "BLOCKED" }
             val interval = if (salon.slotIntervalMinutes > 0) salon.slotIntervalMinutes else 30
@@ -222,7 +222,6 @@ class SchedulingViewModel(
                             checkCal.time = calendar.time
                             checkCal.add(Calendar.MINUTE, k * interval)
                             
-                            val slotIsToday = isToday
                             val slotCalToCheck = Calendar.getInstance().apply {
                                 time = selectedDate
                                 set(Calendar.HOUR_OF_DAY, checkCal.get(Calendar.HOUR_OF_DAY))
@@ -231,7 +230,7 @@ class SchedulingViewModel(
                                 set(Calendar.MILLISECOND, 0)
                             }
                             
-                            if (!isProAvailableForSlot(pro, slotCalToCheck, slotIsToday, now, activeBookings, salon.isConfigurationIndividualized, salon)) {
+                            if (!isProAvailableForSlot(pro, slotCalToCheck, bookingLimitCal, activeBookings, salon.isConfigurationIndividualized, salon)) {
                                 consecutiveAvailable = false
                                 break
                             }
@@ -255,23 +254,21 @@ class SchedulingViewModel(
                                 checkMin >= bStartMin && checkMin < bEndMin
                             } else false
 
-                            val isRetro = if (isToday) {
-                                val slotCal = Calendar.getInstance().apply {
-                                    time = selectedDate
-                                    set(Calendar.HOUR_OF_DAY, checkCal.get(Calendar.HOUR_OF_DAY))
-                                    set(Calendar.MINUTE, checkCal.get(Calendar.MINUTE))
-                                    set(Calendar.SECOND, 0)
-                                    set(Calendar.MILLISECOND, 0)
-                                }
-                                slotCal.before(now)
-                            } else false
+                            val slotCal = Calendar.getInstance().apply {
+                                time = selectedDate
+                                set(Calendar.HOUR_OF_DAY, checkCal.get(Calendar.HOUR_OF_DAY))
+                                set(Calendar.MINUTE, checkCal.get(Calendar.MINUTE))
+                                set(Calendar.SECOND, 0)
+                                set(Calendar.MILLISECOND, 0)
+                            }
+                            val isRetroOrDelay = slotCal.before(bookingLimitCal)
 
                             val isBlocked = activeBookings.any { appt ->
                                 getFormattedTime(appt.date) == checkTimeStr
                             }
 
                             val endMin = timeToMinutes(salon.closingTime) ?: (18 * 60)
-                            if (isBreak || isRetro || isBlocked || checkMin >= endMin) {
+                            if (isBreak || isRetroOrDelay || isBlocked || checkMin >= endMin) {
                                 consecutiveAvailable = false
                                 break
                             }
@@ -285,7 +282,6 @@ class SchedulingViewModel(
                                 checkCal.time = calendar.time
                                 checkCal.add(Calendar.MINUTE, k * interval)
                                 
-                                val slotIsToday = isToday
                                 val slotCalToCheck = Calendar.getInstance().apply {
                                     time = selectedDate
                                     set(Calendar.HOUR_OF_DAY, checkCal.get(Calendar.HOUR_OF_DAY))
@@ -294,7 +290,7 @@ class SchedulingViewModel(
                                     set(Calendar.MILLISECOND, 0)
                                 }
 
-                                if (!isProAvailableForSlot(pro, slotCalToCheck, slotIsToday, now, activeBookings, salon.isConfigurationIndividualized, salon)) {
+                                if (!isProAvailableForSlot(pro, slotCalToCheck, bookingLimitCal, activeBookings, salon.isConfigurationIndividualized, salon)) {
                                     consecutiveAvailable = false
                                     break
                                 }
@@ -332,20 +328,62 @@ class SchedulingViewModel(
             val isAutoAccept = salon?.autoAccept ?: false
             val isLoyaltyAutoValidate = salon?.autoValidateLoyalty ?: false
             
+            val existingAppts = appointmentRepository.getAppointmentsForDay(date, salonId).first()
+            val activeBookings = existingAppts.filter { it.status == "CONFIRMED" || it.status == "PENDING" || it.status == "BLOCKED" }
+            val interval = if ((salon?.slotIntervalMinutes ?: 30) > 0) salon!!.slotIntervalMinutes else 30
+            val serviceDuration = service.durationMinutes
+            val slotsNeeded = Math.ceil(serviceDuration.toDouble() / interval.toDouble()).toInt()
+            
+            val bookingLimitCal = Calendar.getInstance().apply {
+                add(Calendar.HOUR_OF_DAY, salon?.minBookingDelayHours ?: 0)
+            }
+            
             // Auto-assign professional if "Tanto faz" is selected
             val assignedPro = if (_selectedProfessional.value != null) {
                 _selectedProfessional.value
             } else {
-                val timeStr = getFormattedTime(date)
-                val existingAppts = appointmentRepository.getAppointmentsForDay(date, salonId).first()
-                val bookedProIds = existingAppts
-                    .filter { it.status != "CANCELLED" && it.status != "BLOCKED" && getFormattedTime(it.date) == timeStr }
-                    .map { it.professionalId }
-                
                 val qualified = _professionals.value.filter { pro ->
                     pro.specialties.isEmpty() || pro.specialties.contains(service.id)
                 }
-                qualified.find { it.id !in bookedProIds }
+                qualified.find { pro ->
+                    var isProAvailable = true
+                    for (k in 0 until slotsNeeded) {
+                        val slotCal = Calendar.getInstance().apply {
+                            time = date
+                            add(Calendar.MINUTE, k * interval)
+                        }
+                        if (salon != null && !isProAvailableForSlot(pro, slotCal, bookingLimitCal, activeBookings, salon.isConfigurationIndividualized, salon)) {
+                            isProAvailable = false
+                            break
+                        }
+                    }
+                    isProAvailable
+                }
+            }
+
+            if (assignedPro == null) {
+                _statusMessage.emit("Horário ou profissional indisponível para este serviço.")
+                return@launch
+            }
+
+            // double check if the selected professional is actually available at this time
+            if (_selectedProfessional.value != null) {
+                val pro = _selectedProfessional.value!!
+                var isAvailable = true
+                for (k in 0 until slotsNeeded) {
+                    val slotCal = Calendar.getInstance().apply {
+                        time = date
+                        add(Calendar.MINUTE, k * interval)
+                    }
+                    if (salon != null && !isProAvailableForSlot(pro, slotCal, bookingLimitCal, activeBookings, salon.isConfigurationIndividualized, salon)) {
+                        isAvailable = false
+                        break
+                    }
+                }
+                if (!isAvailable) {
+                    _statusMessage.emit("O profissional escolhido não está mais disponível neste horário.")
+                    return@launch
+                }
             }
 
             if (isLoyaltyRedemption) {

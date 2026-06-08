@@ -5,6 +5,7 @@ import android.provider.CalendarContract
 import android.widget.Toast
 import kotlinx.coroutines.launch
 import com.example.agendei_pro.core.repository.AppointmentRepository
+import kotlinx.coroutines.tasks.await
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -46,6 +47,9 @@ fun ClientAppointmentsScreen(onBack: () -> Unit) {
     var appointments by remember { mutableStateOf<List<Appointment>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Próximos, 1 = Histórico
+    
+    var showCancellationBlockDialog by remember { mutableStateOf(false) }
+    var cancellationBlockMessage by remember { mutableStateOf("") }
 
     LaunchedEffect(userUid) {
         if (userUid != null) {
@@ -234,11 +238,31 @@ fun ClientAppointmentsScreen(onBack: () -> Unit) {
                                             OutlinedButton(
                                                 onClick = {
                                                     scope.launch {
-                                                        val result = AppointmentRepository().updateAppointmentStatus(appt.id, "CANCELLED")
-                                                        if (result.isSuccess) {
-                                                            Toast.makeText(context, "Agendamento Cancelado!", Toast.LENGTH_SHORT).show()
-                                                        } else {
-                                                            Toast.makeText(context, "Erro ao cancelar agendamento", Toast.LENGTH_SHORT).show()
+                                                        try {
+                                                            val salonSnap = db.collection("salons").document(appt.salonId).get().await()
+                                                            val minCancelDelay = salonSnap.getLong("minCancelDelayHours") ?: 0
+                                                            val salonPhone = salonSnap.getString("phoneNumber") ?: ""
+
+                                                            val apptTime = appt.date?.time ?: 0L
+                                                            val nowTime = System.currentTimeMillis()
+                                                            val diffHours = (apptTime - nowTime).toDouble() / (1000.0 * 60.0 * 60.0)
+
+                                                            if (diffHours < minCancelDelay) {
+                                                                cancellationBlockMessage = "Não é possível cancelar este agendamento pelo aplicativo devido ao tempo limite de antecedência de $minCancelDelay horas.\n\nPor favor, entre em contato com o salão no telefone/WhatsApp $salonPhone para solicitar a desmarcação."
+                                                                showCancellationBlockDialog = true
+                                                            } else {
+                                                                val result = AppointmentRepository().updateAppointmentStatus(appt.id, "CANCELLED")
+                                                                if (result.isSuccess) {
+                                                                    Toast.makeText(context, "Agendamento Cancelado!", Toast.LENGTH_SHORT).show()
+                                                                } else {
+                                                                    Toast.makeText(context, "Erro ao cancelar agendamento", Toast.LENGTH_SHORT).show()
+                                                                }
+                                                            }
+                                                        } catch (e: Exception) {
+                                                            val result = AppointmentRepository().updateAppointmentStatus(appt.id, "CANCELLED")
+                                                            if (result.isSuccess) {
+                                                                Toast.makeText(context, "Agendamento Cancelado!", Toast.LENGTH_SHORT).show()
+                                                            }
                                                         }
                                                     }
                                                 },
@@ -260,5 +284,20 @@ fun ClientAppointmentsScreen(onBack: () -> Unit) {
                 }
             }
         }
+    }
+
+    if (showCancellationBlockDialog) {
+        AlertDialog(
+            onDismissRequest = { showCancellationBlockDialog = false },
+            title = { Text("Cancelamento Indisponível ⚠️") },
+            text = { Text(cancellationBlockMessage) },
+            confirmButton = {
+                Button(
+                    onClick = { showCancellationBlockDialog = false }
+                ) {
+                    Text("Entendido")
+                }
+            }
+        )
     }
 }

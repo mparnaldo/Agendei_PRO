@@ -89,19 +89,12 @@ fun SalonPerformanceScreen(onBack: () -> Unit) {
     }
 
     // 1. Métricas Financeiras
-    val today = Date()
     val realizedRevenue = filteredAppointments
-        .filter { appt -> 
-            val apptDate = appt.date
-            appt.status == "CONFIRMED" && apptDate != null && !apptDate.after(today) 
-        }
+        .filter { appt -> appt.status == "SERVED" }
         .sumOf { it.servicePrice }
 
     val expectedRevenue = filteredAppointments
-        .filter { appt -> 
-            val apptDate = appt.date
-            appt.status == "CONFIRMED" && apptDate != null && apptDate.after(today) 
-        }
+        .filter { appt -> appt.status == "CONFIRMED" || appt.status == "PENDING" }
         .sumOf { it.servicePrice }
 
     val totalEstimated = realizedRevenue + expectedRevenue
@@ -115,7 +108,7 @@ fun SalonPerformanceScreen(onBack: () -> Unit) {
     // 3. Serviços Mais Agendados
     val servicesRanking = remember(filteredAppointments) {
         filteredAppointments
-            .filter { it.status == "CONFIRMED" }
+            .filter { it.status == "CONFIRMED" || it.status == "SERVED" || it.status == "PENDING" }
             .groupBy { it.serviceName }
             .map { (name, list) ->
                 val count = list.size
@@ -128,7 +121,7 @@ fun SalonPerformanceScreen(onBack: () -> Unit) {
     // 4. Profissionais Mais Requisitados
     val professionalsRanking = remember(filteredAppointments, professionals) {
         filteredAppointments
-            .filter { it.status == "CONFIRMED" }
+            .filter { it.status == "CONFIRMED" || it.status == "SERVED" || it.status == "PENDING" }
             .groupBy { it.professionalId }
             .map { (proId, list) ->
                 val proName = list.firstOrNull()?.professionalName?.ifBlank { "Sem nome" } ?: "Tanto faz / Indefinido"

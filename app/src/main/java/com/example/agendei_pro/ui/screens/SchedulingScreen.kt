@@ -73,7 +73,20 @@ fun SchedulingScreen(
     var showWaitingConfirmDialog by remember { mutableStateOf(false) }
     var joinedWaitingList by remember { mutableStateOf(false) }
     
-    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = selectedDateMillis)
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = selectedDateMillis,
+        selectableDates = object : SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                val todayCal = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                return utcTimeMillis >= todayCal.timeInMillis
+            }
+        }
+    )
 
     LaunchedEffect(Unit) { 
         viewModel.loadServices(salonId)

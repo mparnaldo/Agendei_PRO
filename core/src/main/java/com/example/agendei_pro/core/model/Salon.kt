@@ -42,7 +42,9 @@ data class Salon(
     val isConfigurationIndividualized: Boolean = false,
     @get:PropertyName("hasWaitingList")
     @field:PropertyName("hasWaitingList")
-    val hasWaitingList: Boolean = false
+    val hasWaitingList: Boolean = false,
+    val minBookingDelayHours: Int = 0,
+    val minCancelDelayHours: Int = 0
 )
 
 data class LoyaltyState(

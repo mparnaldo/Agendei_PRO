@@ -171,6 +171,33 @@ class AppointmentRepository {
         firestore.collection("appointments").document(id).update(updates).await()
         if (status == "CANCELLED" && appt != null && appt.status != "CANCELLED") {
             notifyWaitlistForFreeSlot(appt)
+            
+            // Cria notificação na coleção 'notifications' para notificar o outro lado
+            val user = auth.currentUser
+            val recipientUid = if (user != null && user.uid == appt.clientUid) {
+                appt.salonId // Notifica o salão
+            } else {
+                appt.clientUid // Notifica o cliente
+            }
+            
+            val sdf = java.text.SimpleDateFormat("dd/MM 'às' HH:mm", java.util.Locale.getDefault())
+            val dateStr = appt.date?.let { sdf.format(it) } ?: ""
+            val title = "Agendamento Cancelado ❌"
+            val message = if (user != null && user.uid == appt.clientUid) {
+                "O cliente ${appt.clientName} cancelou o horário de $dateStr (${appt.serviceName})."
+            } else {
+                "${appt.salonName} cancelou seu horário de $dateStr para ${appt.serviceName}."
+            }
+
+            val notificationDoc = firestore.collection("notifications").document()
+            val notificationData = mapOf(
+                "id" to notificationDoc.id,
+                "recipientUid" to recipientUid,
+                "title" to title,
+                "message" to message,
+                "createdAt" to Date()
+            )
+            notificationDoc.set(notificationData).await()
         }
         Result.success(Unit)
     } catch (e: Exception) { Result.failure(e) }

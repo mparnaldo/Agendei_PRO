@@ -18,7 +18,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -699,14 +699,22 @@ fun AppointmentItem(
     val isPending = appt.status == "PENDING"
     val isBlocked = appt.status == "BLOCKED"
     val isConfirmed = appt.status == "CONFIRMED"
+    val isServed = appt.status == "SERVED"
+    val isCancelled = appt.status == "CANCELLED"
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (isCancelled) Modifier.alpha(0.5f) else Modifier),
         colors = CardDefaults.cardColors(
             containerColor = if (isBlocked) {
                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
             } else if (isPending) {
                 MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)
+            } else if (isCancelled) {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            } else if (isServed) {
+                Color(0xFFE8F5E9)
             } else {
                 MaterialTheme.colorScheme.surfaceVariant
             }
@@ -725,6 +733,8 @@ fun AppointmentItem(
                     MaterialTheme.colorScheme.outline
                 } else if (isPending) {
                     MaterialTheme.colorScheme.error
+                } else if (isCancelled) {
+                    MaterialTheme.colorScheme.outline
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 }
@@ -752,7 +762,12 @@ fun AppointmentItem(
                             modifier = Modifier.padding(bottom = 2.dp)
                         )
                     }
-                    Text(appt.clientName, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(
+                        text = appt.clientName,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        style = if (isCancelled) androidx.compose.ui.text.TextStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough) else androidx.compose.ui.text.TextStyle.Default
+                    )
                     val detailsText = if (appt.professionalName.isNotBlank()) {
                         "${appt.serviceName} • com ${appt.professionalName}"
                     } else {
@@ -760,7 +775,35 @@ fun AppointmentItem(
                     }
                     Text(detailsText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
 
-                    if (appt.loyaltyRedeemed) {
+                    if (isServed) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Surface(
+                            color = Color(0xFFE8F5E9),
+                            contentColor = Color(0xFF2E7D32),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = "✓ Prestado",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    } else if (isCancelled) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Surface(
+                            color = Color(0xFFFFEBEE),
+                            contentColor = Color(0xFFC62828),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = "✗ Cancelado",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    } else if (appt.loyaltyRedeemed) {
                         Spacer(modifier = Modifier.height(4.dp))
                         Surface(
                             color = Color(0xFFFFF9C4),
@@ -840,12 +883,12 @@ fun AppointmentItem(
                         modifier = Modifier.size(20.dp)
                     )
                 }
-            } else {
+            } else if (isConfirmed) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (isConfirmed && hasLoyalty && !appt.loyaltyValidated) {
+                    if (hasLoyalty && !appt.loyaltyValidated) {
                         Button(
                             onClick = { onValidateLoyalty(appt.id) },
                             colors = ButtonDefaults.buttonColors(
@@ -859,12 +902,33 @@ fun AppointmentItem(
                         }
                     }
 
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = "Confirmado",
-                        tint = Color(0xFF2E7D32),
-                        modifier = Modifier.size(28.dp)
-                    )
+                    IconButton(
+                        onClick = { onUpdateStatus(appt.id, "SERVED") },
+                        modifier = Modifier
+                            .background(Color(0xFF2E7D32), CircleShape)
+                            .size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Concluir Atendimento",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { onUpdateStatus(appt.id, "CANCELLED") },
+                        modifier = Modifier
+                            .background(MaterialTheme.colorScheme.error, CircleShape)
+                            .size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Cancelar Agendamento",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }

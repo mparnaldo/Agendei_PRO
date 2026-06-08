@@ -132,6 +132,20 @@ class NotificationService : Service() {
                         seenAppointmentIds.addAll(currentIds)
                     }
                 }
+
+            val notificationsReg = firestore.collection("notifications")
+                .whereEqualTo("recipientUid", userId)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null || snapshot == null) return@addSnapshotListener
+                    val documents = snapshot.documents
+                    for (doc in documents) {
+                        val title = doc.getString("title") ?: "Notificação"
+                        val message = doc.getString("message") ?: ""
+                        showNotification(title, message)
+                        doc.reference.delete()
+                    }
+                }
+            activeRegistrations.add(notificationsReg)
         } else {
             val appointmentStatuses = mutableMapOf<String, String>()
             listenerRegistration = firestore.collection("appointments")

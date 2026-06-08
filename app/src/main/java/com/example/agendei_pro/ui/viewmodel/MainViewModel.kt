@@ -10,6 +10,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 sealed class AuthState {
     object Loading : AuthState()
@@ -307,14 +308,16 @@ class MainViewModel(
         loyaltyRedemptionDays: Int,
         slotInterval: Int,
         isIndividualized: Boolean,
-        hasWaitingList: Boolean
+        hasWaitingList: Boolean,
+        minBookingDelayHours: Int,
+        minCancelDelayHours: Int
     ) {
         val state = _authState.value as? AuthState.AuthenticatedWithSalon ?: return
         viewModelScope.launch {
             val result = salonRepository.updateSalonSettings(
                 name, opening, closing, breakStart, breakEnd, days, autoAccept, logoShape, segment,
                 hasLoyalty, loyaltyRequired, loyaltyReward, autoValidateLoyalty, loyaltyRedemptionDays,
-                slotInterval, isIndividualized, hasWaitingList
+                slotInterval, isIndividualized, hasWaitingList, minBookingDelayHours, minCancelDelayHours
             )
             if (result.isSuccess) {
                 val updatedSalon = state.salon.copy(
@@ -334,7 +337,9 @@ class MainViewModel(
                     loyaltyRedemptionDays = loyaltyRedemptionDays,
                     slotIntervalMinutes = slotInterval,
                     isConfigurationIndividualized = isIndividualized,
-                    hasWaitingList = hasWaitingList
+                    hasWaitingList = hasWaitingList,
+                    minBookingDelayHours = minBookingDelayHours,
+                    minCancelDelayHours = minCancelDelayHours
                 )
                 _authState.value = state.copy(salon = updatedSalon)
             }
@@ -368,7 +373,8 @@ class MainViewModel(
 
     data class SalonClientItem(
         val profile: com.example.agendei_pro.core.model.UserProfile,
-        val unredeemedStamps: Int
+        val unredeemedStamps: Int,
+        val isBlocked: Boolean = false
     )
 
     private val _salonClients = MutableStateFlow<List<SalonClientItem>>(emptyList())
@@ -380,15 +386,29 @@ class MainViewModel(
             try {
                 val profiles = salonRepository.getSalonClients(state.salon.id)
                 val items = profiles.map { profile ->
+                    val bindingSnap = db.collection("user_bindings")
+                        .document("${profile.uid}_${state.salon.id}")
+                        .get().await()
+                    val isBlocked = bindingSnap.getBoolean("isBlocked") ?: false
+                    
                     val history = appointmentRepository.getClientHistory(profile.uid)
                     val salonHistory = history.filter { it.salonId == state.salon.id }
                     val loyaltyState = state.salon.calculateLoyaltyState(salonHistory)
                     val activeStamps = loyaltyState.activeRewardsCount * state.salon.loyaltyRequiredServices + loyaltyState.currentCardStampsCount
-                    SalonClientItem(profile, activeStamps)
+                    SalonClientItem(profile, activeStamps, isBlocked)
                 }
                 _salonClients.value = items
             } catch (e: Exception) {
                 _salonClients.value = emptyList()
+            }
+        }
+    }
+
+    fun toggleClientBlockStatus(clientUid: String, isBlocked: Boolean) {
+        val state = _authState.value as? AuthState.AuthenticatedWithSalon ?: return
+        viewModelScope.launch {
+            if (salonRepository.updateClientBlockStatus(state.salon.id, clientUid, isBlocked).isSuccess) {
+                loadSalonClients()
             }
         }
     }

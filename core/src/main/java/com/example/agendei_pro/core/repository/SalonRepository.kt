@@ -182,7 +182,9 @@ class SalonRepository {
         loyaltyRedemptionDays: Int,
         slotInterval: Int,
         isIndividualized: Boolean,
-        hasWaitingList: Boolean
+        hasWaitingList: Boolean,
+        minBookingDelayHours: Int,
+        minCancelDelayHours: Int
     ): Result<Unit> {
         val user = auth.currentUser ?: return Result.failure(Exception("Não logado"))
         return try {
@@ -203,8 +205,22 @@ class SalonRepository {
                 "loyaltyRedemptionDays" to loyaltyRedemptionDays,
                 "slotIntervalMinutes" to slotInterval,
                 "isConfigurationIndividualized" to isIndividualized,
-                "hasWaitingList" to hasWaitingList
+                "hasWaitingList" to hasWaitingList,
+                "minBookingDelayHours" to minBookingDelayHours,
+                "minCancelDelayHours" to minCancelDelayHours
             )).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateClientBlockStatus(salonId: String, clientUid: String, isBlocked: Boolean): Result<Unit> {
+        return try {
+            firestore.collection("user_bindings")
+                .document("${clientUid}_${salonId}")
+                .update("isBlocked", isBlocked)
+                .await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

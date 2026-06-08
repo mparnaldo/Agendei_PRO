@@ -45,6 +45,8 @@ fun SalonSettingsScreen(
     currentSlotInterval: Int,
     currentIsIndividualized: Boolean,
     currentHasWaitingList: Boolean,
+    currentMinBookingDelayHours: Int,
+    currentMinCancelDelayHours: Int,
     uploadProgress: Int?,
     onSave: (
         name: String,
@@ -63,7 +65,9 @@ fun SalonSettingsScreen(
         loyaltyRedemptionDays: Int,
         slotInterval: Int,
         isIndividualized: Boolean,
-        hasWaitingList: Boolean
+        hasWaitingList: Boolean,
+        minBookingDelayHours: Int,
+        minCancelDelayHours: Int
     ) -> Unit,
     onLogoSelected: (Uri) -> Unit,
     onRemoveLogo: () -> Unit,
@@ -86,6 +90,8 @@ fun SalonSettingsScreen(
     var slotInterval by remember { mutableIntStateOf(currentSlotInterval) }
     var isIndividualized by remember { mutableStateOf(currentIsIndividualized) }
     var hasWaitingList by remember { mutableStateOf(currentHasWaitingList) }
+    var minBookingDelayHours by remember { mutableStateOf(currentMinBookingDelayHours.toString()) }
+    var minCancelDelayHours by remember { mutableStateOf(currentMinCancelDelayHours.toString()) }
 
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { onLogoSelected(it) }
@@ -284,6 +290,37 @@ fun SalonSettingsScreen(
             Spacer(Modifier.height(16.dp))
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Políticas de Antecedência (Horas)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = minBookingDelayHours,
+                        onValueChange = { minBookingDelayHours = it },
+                        label = { Text("Antecedência Mínima para Agendar (Horas)") },
+                        placeholder = { Text("Ex: 3") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = minCancelDelayHours,
+                        onValueChange = { minCancelDelayHours = it },
+                        label = { Text("Antecedência Mínima para Cancelar (Horas)") },
+                        placeholder = { Text("Ex: 2") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                        )
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -359,7 +396,9 @@ fun SalonSettingsScreen(
                         loyaltyRedemptionDays.toIntOrNull() ?: 30,
                         slotInterval,
                         isIndividualized,
-                        hasWaitingList
+                        hasWaitingList,
+                        minBookingDelayHours.toIntOrNull() ?: 0,
+                        minCancelDelayHours.toIntOrNull() ?: 0
                     ) 
                 }, 
                 modifier = Modifier.fillMaxWidth().padding(top = 32.dp).height(56.dp), 

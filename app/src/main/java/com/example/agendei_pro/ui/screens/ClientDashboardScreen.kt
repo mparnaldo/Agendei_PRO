@@ -44,6 +44,7 @@ fun ClientDashboardScreen(
     loyaltyState: LoyaltyState = LoyaltyState(),
     globalAnnouncement: Announcement? = null,
     salonAnnouncement: Announcement? = null,
+    isBlocked: Boolean = false,
     onNewAppointment: () -> Unit,
     onReorderAppointment: (Appointment) -> Unit,
     onMyAppointmentsClick: () -> Unit,
@@ -248,14 +249,45 @@ fun ClientDashboardScreen(
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = onNewAppointment,
+                onClick = { if (!isBlocked) onNewAppointment() },
                 icon = { Icon(Icons.Default.Add, null) },
                 text = { Text("Novo Agendamento") },
-                containerColor = MaterialTheme.colorScheme.primary
+                containerColor = if (isBlocked) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary,
+                contentColor = if (isBlocked) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onPrimary
             )
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+            if (isBlocked) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = "Bloqueado",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "Seu cadastro está temporariamente bloqueado para agendamentos online neste salão. Por favor, entre em contato direto para mais informações.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
             if (globalAnnouncement != null && globalAnnouncement.displayType == "BANNER" && !isGlobalDismissed) {
                 Card(
                     modifier = Modifier
@@ -529,13 +561,16 @@ fun ClientDashboardScreen(
                 }
             }
             
-            if (appointments.isEmpty()) {
+            val activeAppointments = remember(appointments) {
+                appointments.filter { it.status != "CANCELLED" }
+            }
+            if (activeAppointments.isEmpty()) {
                 Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Text("Nenhum agendamento ativo.", color = MaterialTheme.colorScheme.outline)
                 }
             } else {
                 LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(16.dp)) {
-                    items(appointments) { appt ->
+                    items(activeAppointments) { appt ->
                         val sdf = SimpleDateFormat("dd/MM HH:mm", Locale("pt", "BR"))
                         val (statusText, badgeColor, badgeContentColor) = when(appt.status) {
                             "CONFIRMED" -> Triple("Confirmado", Color(0xFFE8F5E9), Color(0xFF2E7D32))
