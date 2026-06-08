@@ -284,6 +284,23 @@ class MainActivity : ComponentActivity() {
                                                 onMenuClick = { scope.launch { drawerState.open() } }
                                             )
                                         }
+                                        is AuthState.AuthenticatedNoBindings -> {
+                                            var linkLoading by remember { mutableStateOf(false) }
+                                            var linkError by remember { mutableStateOf<String?>(null) }
+                                            LinkSalonScreen(
+                                                onLinkSuccess = { viewModel.checkUserStatus(isProVersion) },
+                                                onSearchCode = { code ->
+                                                    linkLoading = true
+                                                    linkError = null
+                                                    viewModel.linkNewSalon(code) { success, err ->
+                                                        linkLoading = false
+                                                        linkError = err
+                                                    }
+                                                },
+                                                isLoading = linkLoading,
+                                                errorMessage = linkError
+                                            )
+                                        }
                                         else -> PlaceholderScreen("Erro")
                                     }
                                 }
