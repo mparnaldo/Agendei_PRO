@@ -47,7 +47,11 @@ fun AgendaScreen(
     val currentMonth by viewModel.currentMonth.collectAsState()
     val salonHasLoyalty by viewModel.salonHasLoyalty.collectAsState()
     val viewMode by viewModel.viewMode.collectAsState()
+    val salon by viewModel.salon.collectAsState()
+    val services by viewModel.services.collectAsState()
     var showBlockDialog by remember { mutableStateOf(false) }
+    var prefilledBlockTime by remember { mutableStateOf("08:00") }
+    var prefilledBlockProId by remember { mutableStateOf("ALL") }
 
     var professionals by remember { mutableStateOf<List<com.example.agendei_pro.core.model.Professional>>(emptyList()) }
     var selectedProfessionalId by remember { mutableStateOf<String?>(null) }
@@ -216,9 +220,18 @@ fun AgendaScreen(
                     selectedDate = selectedDate,
                     title = "Agendamentos do Dia",
                     hasLoyalty = salonHasLoyalty,
+                    salon = salon,
+                    services = services,
+                    selectedProfessionalId = selectedProfessionalId,
+                    professionals = professionals,
                     onValidateLoyalty = { viewModel.updateLoyaltyValidation(it, true) },
                     onUpdateStatus = { id, s -> viewModel.updateStatus(id, s) },
-                    onDeleteBlockage = { viewModel.deleteAppointment(it) }
+                    onDeleteBlockage = { viewModel.deleteAppointment(it) },
+                    onBlockSlot = { time, proId ->
+                        prefilledBlockTime = time
+                        prefilledBlockProId = proId
+                        showBlockDialog = true
+                    }
                 )
             } else {
                 // Exibe a linha do tempo / lista contínua rolando
@@ -235,9 +248,9 @@ fun AgendaScreen(
 
     if (showBlockDialog) {
         var selectedBlockDate by remember { mutableStateOf(selectedDate) }
-        var timeStr by remember { mutableStateOf("08:00") }
+        var timeStr by remember { mutableStateOf(prefilledBlockTime) }
         var reason by remember { mutableStateOf("Almoço") }
-        var selectedProId by remember { mutableStateOf("ALL") }
+        var selectedProId by remember { mutableStateOf(prefilledBlockProId) }
         var showProDropdown by remember { mutableStateOf(false) }
         val selectedProName = remember(selectedProId, professionals) {
             if (selectedProId == "ALL") "Todo o Salão"
@@ -536,44 +549,243 @@ fun TimelineView(
     }
 }
 
+private data class TimelineItem(
+    val time: String,
+    val appointment: Appointment?,
+    val isBreak: Boolean,
+    val isOutOfWorkingHours: Boolean
+)
+
+private fun timeToMinutes(timeStr: String): Int? {
+    val parts = timeStr.split(":")
+    if (parts.size != 2) return null
+    val hours = parts[0].trim().toIntOrNull() ?: return null
+    val minutes = parts[1].trim().toIntOrNull() ?: return null
+    return hours * 60 + minutes
+}
+
+private fun getFormattedTime(date: Date?): String {
+    if (date == null) return ""
+    val c = Calendar.getInstance().apply { time = date }
+    return String.format(Locale.US, "%02d:%02d", c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE))
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun AgendaListView(
     appointments: List<Appointment>,
     selectedDate: Date,
     title: String,
     hasLoyalty: Boolean,
+    salon: com.example.agendei_pro.core.model.Salon?,
+    services: List<com.example.agendei_pro.core.model.Service>,
+    selectedProfessionalId: String?,
+    professionals: List<com.example.agendei_pro.core.model.Professional>,
     onValidateLoyalty: (String) -> Unit,
     onUpdateStatus: (String, String) -> Unit,
-    onDeleteBlockage: (String) -> Unit
+    onDeleteBlockage: (String) -> Unit,
+    onBlockSlot: (String, String) -> Unit
 ) {
     val sdf = SimpleDateFormat("EEEE, dd 'de' MMMM", Locale("pt", "BR"))
+    var showFullTimeline by remember { mutableStateOf(false) }
+
     Column(modifier = Modifier.fillMaxSize()) {
-        Text(
-            text = "${title} - ${sdf.format(selectedDate).replaceFirstChar { it.uppercase() }}",
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.secondary
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "${title} - ${sdf.format(selectedDate).replaceFirstChar { it.uppercase() }}",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.weight(1f)
+            )
+            
+            FilterChip(
+                selected = showFullTimeline,
+                onClick = { showFullTimeline = !showFullTimeline },
+                label = { Text("Linha do Tempo") }
+            )
+        }
         
-        if (appointments.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Sem compromissos nesta data.", color = MaterialTheme.colorScheme.outline)
+        if (!showFullTimeline || salon == null) {
+            if (appointments.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Sem compromissos nesta data.", color = MaterialTheme.colorScheme.outline)
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(appointments) { 
+                        AppointmentItem(
+                            appt = it,
+                            hasLoyalty = hasLoyalty,
+                            onValidateLoyalty = onValidateLoyalty,
+                            onUpdateStatus = onUpdateStatus,
+                            onDeleteBlockage = onDeleteBlockage
+                        )
+                    }
+                }
             }
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(appointments) { 
-                    AppointmentItem(
-                        appt = it,
-                        hasLoyalty = hasLoyalty,
-                        onValidateLoyalty = onValidateLoyalty,
-                        onUpdateStatus = onUpdateStatus,
-                        onDeleteBlockage = onDeleteBlockage
-                    )
+            // Generate full timeline
+            val dayCal = Calendar.getInstance().apply { time = selectedDate }
+            val dayOfWeek = dayCal.get(Calendar.DAY_OF_WEEK)
+            val workingDays = if (selectedProfessionalId != null && salon.isConfigurationIndividualized) {
+                val pro = professionals.find { it.id == selectedProfessionalId }
+                if (pro?.hasCustomSchedule == true) pro.workingDays else salon.workingDays
+            } else salon.workingDays
+            
+            val isWorkDay = workingDays.contains(dayOfWeek)
+            
+            if (!isWorkDay) {
+                Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+                    Text("Este dia não é de expediente para o profissional/salão.", color = MaterialTheme.colorScheme.outline, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                }
+            } else {
+                val timeSdf = SimpleDateFormat("HH:mm", Locale.US)
+                val startTimeStr = if (selectedProfessionalId != null && salon.isConfigurationIndividualized) {
+                    val pro = professionals.find { it.id == selectedProfessionalId }
+                    if (pro?.hasCustomSchedule == true) pro.openingTime else salon.openingTime
+                } else salon.openingTime
+                
+                val endTimeStr = if (selectedProfessionalId != null && salon.isConfigurationIndividualized) {
+                    val pro = professionals.find { it.id == selectedProfessionalId }
+                    if (pro?.hasCustomSchedule == true) pro.closingTime else salon.closingTime
+                } else salon.closingTime
+
+                val interval = if (salon.slotIntervalMinutes > 0) salon.slotIntervalMinutes else 30
+
+                val timelineItems = remember(selectedDate, appointments, selectedProfessionalId, salon, services, professionals) {
+                    val list = mutableListOf<TimelineItem>()
+                    try {
+                        val startTime = timeSdf.parse(startTimeStr) ?: return@remember emptyList()
+                        val endTime = timeSdf.parse(endTimeStr) ?: return@remember emptyList()
+                        
+                        val cal = Calendar.getInstance()
+                        cal.time = startTime
+                        while (cal.time.before(endTime)) {
+                            val slotTimeStr = timeSdf.format(cal.time)
+                            val slotMin = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
+                            
+                            val isBreak = if (selectedProfessionalId != null && salon.isConfigurationIndividualized) {
+                                val pro = professionals.find { it.id == selectedProfessionalId }
+                                if (pro?.hasCustomSchedule == true) {
+                                    val brStartMin = pro.breakStart?.let { timeToMinutes(it) }
+                                    val brEndMin = pro.breakEnd?.let { timeToMinutes(it) }
+                                    brStartMin != null && brEndMin != null && slotMin >= brStartMin && slotMin < brEndMin
+                                } else {
+                                    val brStartMin = salon.breakStart?.let { timeToMinutes(it) }
+                                    val brEndMin = salon.breakEnd?.let { timeToMinutes(it) }
+                                    brStartMin != null && brEndMin != null && slotMin >= brStartMin && slotMin < brEndMin
+                                }
+                            } else {
+                                val brStartMin = salon.breakStart?.let { timeToMinutes(it) }
+                                val brEndMin = salon.breakEnd?.let { timeToMinutes(it) }
+                                brStartMin != null && brEndMin != null && slotMin >= brStartMin && slotMin < brEndMin
+                            }
+                            
+                            val appt = appointments.find { appt ->
+                                val apptDate = appt.date ?: return@find false
+                                val apptCal = Calendar.getInstance().apply { time = apptDate }
+                                val apptStartMin = apptCal.get(Calendar.HOUR_OF_DAY) * 60 + apptCal.get(Calendar.MINUTE)
+                                val durationMin = if (appt.serviceId == "BLOCKAGE") interval else {
+                                    services.find { it.id == appt.serviceId }?.durationMinutes ?: 30
+                                }
+                                val apptEndMin = apptStartMin + durationMin
+                                slotMin >= apptStartMin && slotMin < apptEndMin
+                            }
+                            
+                            list.add(TimelineItem(slotTimeStr, appt, isBreak, false))
+                            cal.add(Calendar.MINUTE, interval)
+                        }
+                    } catch(e: Exception) {}
+                    list
+                }
+
+                if (timelineItems.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Configuração de horários inválida.", color = MaterialTheme.colorScheme.outline)
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(timelineItems) { item ->
+                            if (item.isBreak) {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                                ) {
+                                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Text(item.time, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.outline)
+                                        Spacer(modifier = Modifier.width(16.dp))
+                                        Text("☕ Intervalo / Almoço", color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodyMedium)
+                                    }
+                                }
+                            } else if (item.appointment != null) {
+                                val isStart = item.time == getFormattedTime(item.appointment.date)
+                                if (isStart) {
+                                    AppointmentItem(
+                                        appt = item.appointment,
+                                        hasLoyalty = hasLoyalty,
+                                        onValidateLoyalty = onValidateLoyalty,
+                                        onUpdateStatus = onUpdateStatus,
+                                        onDeleteBlockage = onDeleteBlockage
+                                    )
+                                } else {
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f))
+                                    ) {
+                                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Text(item.time, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.outline)
+                                            Spacer(modifier = Modifier.width(16.dp))
+                                            val occupancyText = if (item.appointment.status == "BLOCKED") {
+                                                "🔒 Ocupado (Ausência/Bloqueio)"
+                                            } else {
+                                                "⏳ Em andamento: ${item.appointment.serviceName} (${item.appointment.clientName})"
+                                            }
+                                            Text(occupancyText, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodyMedium)
+                                        }
+                                    }
+                                }
+                            } else {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9).copy(alpha = 0.6f)),
+                                    border = BorderStroke(1.dp, Color(0xFFC8E6C9))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(item.time, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                                            Spacer(modifier = Modifier.width(16.dp))
+                                            Text("🟢 Disponível", color = Color(0xFF2E7D32), fontWeight = FontWeight.SemiBold)
+                                        }
+                                        TextButton(
+                                            onClick = { onBlockSlot(item.time, selectedProfessionalId ?: "ALL") },
+                                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                        ) {
+                                            Icon(Icons.Default.Block, null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Bloquear", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -796,8 +1008,13 @@ fun AppointmentItem(
                             contentColor = Color(0xFFC62828),
                             shape = RoundedCornerShape(4.dp)
                         ) {
+                            val cancelText = when (appt.cancelledBy) {
+                                "SALON" -> "✗ Cancelado pelo Salão"
+                                "CLIENT" -> "✗ Cancelado pelo Cliente"
+                                else -> "✗ Cancelado"
+                            }
                             Text(
-                                text = "✗ Cancelado",
+                                text = cancelText,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)

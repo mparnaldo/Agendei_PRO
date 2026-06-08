@@ -168,6 +168,11 @@ class AppointmentRepository {
         if (validateLoyalty) {
             updates["loyaltyValidated"] = true
         }
+        if (status == "CANCELLED") {
+            val user = auth.currentUser
+            val cancelledBy = if (user != null && user.uid == appt?.clientUid) "CLIENT" else "SALON"
+            updates["cancelledBy"] = cancelledBy
+        }
         firestore.collection("appointments").document(id).update(updates).await()
         if (status == "CANCELLED" && appt != null && appt.status != "CANCELLED") {
             notifyWaitlistForFreeSlot(appt)

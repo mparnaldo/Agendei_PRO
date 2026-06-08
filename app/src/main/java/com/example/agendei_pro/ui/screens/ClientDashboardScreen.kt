@@ -540,7 +540,11 @@ fun ClientDashboardScreen(
                         }
                         Button(
                             onClick = { onReorderAppointment(lastCompletedAppointment) },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                            enabled = !isBlocked,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondary,
+                                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
                         ) {
                             Icon(Icons.Default.Refresh, null)
                             Spacer(modifier = Modifier.width(4.dp))

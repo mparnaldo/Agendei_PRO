@@ -156,7 +156,14 @@ fun ClientAppointmentsScreen(onBack: () -> Unit) {
                                         val (statusText, badgeColor) = when (appt.status) {
                                             "CONFIRMED" -> "Confirmado" to Color(0xFF4CAF50)
                                             "PENDING" -> "Pendente" to Color(0xFFFF9800)
-                                            "CANCELLED" -> "Cancelado" to Color(0xFFE53935)
+                                            "CANCELLED" -> {
+                                                val txt = when (appt.cancelledBy) {
+                                                    "CLIENT" -> "Cancelado por você"
+                                                    "SALON" -> "Cancelado pelo salão"
+                                                    else -> "Cancelado"
+                                                }
+                                                txt to Color(0xFFE53935)
+                                            }
                                             "BLOCKED" -> "Bloqueado" to Color(0xFF757575)
                                             else -> appt.status to MaterialTheme.colorScheme.primary
                                         }

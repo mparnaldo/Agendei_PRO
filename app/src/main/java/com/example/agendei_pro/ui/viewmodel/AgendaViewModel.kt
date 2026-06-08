@@ -30,12 +30,24 @@ class AgendaViewModel(private val repository: AppointmentRepository = Appointmen
     private val _salonHasLoyalty = MutableStateFlow(false)
     val salonHasLoyalty: StateFlow<Boolean> = _salonHasLoyalty
 
+    private val _salon = MutableStateFlow<com.example.agendei_pro.core.model.Salon?>(null)
+    val salon: StateFlow<com.example.agendei_pro.core.model.Salon?> = _salon
+
+    private val _services = MutableStateFlow<List<com.example.agendei_pro.core.model.Service>>(emptyList())
+    val services: StateFlow<List<com.example.agendei_pro.core.model.Service>> = _services
+
     init {
         val id = salonId
         if (id != null) {
             viewModelScope.launch {
-                val salon = com.example.agendei_pro.core.repository.SalonRepository().getSalonById(id)
-                _salonHasLoyalty.value = salon?.hasLoyaltyProgram ?: false
+                val salonObj = com.example.agendei_pro.core.repository.SalonRepository().getSalonById(id)
+                _salon.value = salonObj
+                _salonHasLoyalty.value = salonObj?.hasLoyaltyProgram ?: false
+            }
+            viewModelScope.launch {
+                com.example.agendei_pro.core.repository.ServiceRepository().getServices(id).collect { list ->
+                    _services.value = list
+                }
             }
         }
     }

@@ -1,6 +1,7 @@
 package com.example.agendei_pro.core.repository
 
 import com.example.agendei_pro.core.model.Salon
+import com.example.agendei_pro.core.model.UserBinding
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
@@ -347,6 +348,15 @@ class SalonRepository {
             Result.success(downloadUrl)
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    suspend fun getUserBinding(salonId: String, clientUid: String): UserBinding? {
+        return try {
+            val doc = firestore.collection("user_bindings").document("${clientUid}_${salonId}").get().await()
+            doc.toObject(UserBinding::class.java)
+        } catch (e: Exception) {
+            null
         }
     }
 }

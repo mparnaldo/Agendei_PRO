@@ -22,5 +22,6 @@ data class Appointment(
     @field:PropertyName("loyaltyRedeemed")
     val loyaltyRedeemed: Boolean = false,
     val professionalId: String = "",
-    val professionalName: String = ""
+    val professionalName: String = "",
+    val cancelledBy: String? = null
 )
