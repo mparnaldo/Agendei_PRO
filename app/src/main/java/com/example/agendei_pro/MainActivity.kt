@@ -220,6 +220,7 @@ class MainActivity : ComponentActivity() {
                                     when (val state = authState) {
                                         is AuthState.Loading -> PlaceholderScreen("Iniciando...")
                                         is AuthState.Unauthenticated -> WelcomeScreen(
+                                            isProVersion = isProVersion,
                                             onNavigateToLogin = { scope.launch { AuthManager(navController.context).signInWithGoogle().onSuccess { viewModel.checkUserStatus(isProVersion) } } },
                                             onNavigateToRegister = { scope.launch { AuthManager(navController.context).signInWithGoogle().onSuccess { viewModel.checkUserStatus(isProVersion) } } }
                                         )

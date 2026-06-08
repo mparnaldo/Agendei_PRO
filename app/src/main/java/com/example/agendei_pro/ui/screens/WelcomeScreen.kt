@@ -15,6 +15,7 @@ import com.example.agendei_pro.ui.theme.Agendei_PROTheme
 
 @Composable
 fun WelcomeScreen(
+    isProVersion: Boolean,
     onNavigateToLogin: () -> Unit,
     onNavigateToRegister: () -> Unit
 ) {
@@ -30,7 +31,7 @@ fun WelcomeScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Agendei PRO",
+                text = if (isProVersion) "Agendei PRO" else "Agendei",
                 style = MaterialTheme.typography.headlineLarge.copy(
                     fontWeight = FontWeight.Bold,
                     fontSize = 40.sp,
@@ -39,7 +40,7 @@ fun WelcomeScreen(
             )
             
             Text(
-                text = "A gestão do seu salão na palma da sua mão.",
+                text = if (isProVersion) "A gestão do seu salão na palma da sua mão." else "Agende seus horários nos melhores estabelecimentos com facilidade.",
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 8.dp, bottom = 48.dp)
@@ -50,7 +51,7 @@ fun WelcomeScreen(
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = MaterialTheme.shapes.medium
             ) {
-                Text("Entrar na minha conta")
+                Text(if (isProVersion) "Entrar na minha conta" else "Entrar com o Google")
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -60,13 +61,13 @@ fun WelcomeScreen(
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = MaterialTheme.shapes.medium
             ) {
-                Text("Cadastrar meu Salão")
+                Text(if (isProVersion) "Cadastrar meu Salão" else "Criar nova conta")
             }
 
             Spacer(modifier = Modifier.height(32.dp))
             
             Text(
-                text = "Teste grátis por 10 dias!",
+                text = if (isProVersion) "Teste grátis por 10 dias!" else "Encontre salões, barbearias e clínicas!",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.secondary
             )
@@ -78,6 +79,6 @@ fun WelcomeScreen(
 @Composable
 fun WelcomeScreenPreview() {
     Agendei_PROTheme {
-        WelcomeScreen(onNavigateToLogin = {}, onNavigateToRegister = {})
+        WelcomeScreen(isProVersion = true, onNavigateToLogin = {}, onNavigateToRegister = {})
     }
 }
