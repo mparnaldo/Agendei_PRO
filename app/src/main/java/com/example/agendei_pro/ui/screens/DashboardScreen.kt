@@ -1,5 +1,6 @@
 package com.example.agendei_pro.ui.screens
 
+import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
@@ -9,7 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.example.agendei_pro.core.model.Appointment
+import com.example.agendei_pro.core.model.Announcement
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -37,9 +39,10 @@ fun DashboardScreen(
     daysRemaining: Int,
     pendingAppointments: List<Appointment>,
     userPhotoUrl: String?,
-    globalAnnouncement: String? = null,
+    globalAnnouncement: Announcement? = null,
     onManageServices: () -> Unit,
     onViewAgenda: () -> Unit,
+    onFinancialClick: () -> Unit,
     onUpdateStatus: (String, String) -> Unit,
     onSettingsClick: () -> Unit,
     onThemeClick: () -> Unit,
@@ -47,6 +50,53 @@ fun DashboardScreen(
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+
+    val prefs = remember(context) { context.getSharedPreferences("announcements_prefs", Context.MODE_PRIVATE) }
+    
+    var isGlobalDismissed by remember(globalAnnouncement) {
+        mutableStateOf(
+            globalAnnouncement?.let { ann ->
+                val expired = ann.expiresAt?.let { it.before(Date()) } ?: false
+                expired || (ann.duration == "ONCE" && prefs.getBoolean("dismissed_${ann.id}", false))
+            } ?: true
+        )
+    }
+
+    var showGlobalPopup by remember(globalAnnouncement) {
+        mutableStateOf(
+            globalAnnouncement?.let { ann ->
+                val expired = ann.expiresAt?.let { it.before(Date()) } ?: false
+                ann.displayType == "POPUP" && !expired && !prefs.getBoolean("dismissed_${ann.id}", false)
+            } ?: false
+        )
+    }
+
+    if (showGlobalPopup && globalAnnouncement != null) {
+        AlertDialog(
+            onDismissRequest = {
+                prefs.edit().putBoolean("dismissed_${globalAnnouncement.id}", true).apply()
+                showGlobalPopup = false
+            },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Campaign, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(globalAnnouncement.title.ifBlank { "Comunicado" }, fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Text(globalAnnouncement.message, style = MaterialTheme.typography.bodyLarge)
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    prefs.edit().putBoolean("dismissed_${globalAnnouncement.id}", true).apply()
+                    showGlobalPopup = false
+                }) {
+                    Text("Entendido")
+                }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -75,7 +125,7 @@ fun DashboardScreen(
         }
     ) { padding ->
         LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
-            if (!globalAnnouncement.isNullOrBlank()) {
+            if (globalAnnouncement != null && globalAnnouncement.displayType == "BANNER" && !isGlobalDismissed) {
                 item {
                     Card(
                         modifier = Modifier
@@ -88,7 +138,7 @@ fun DashboardScreen(
                         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                     ) {
                         Row(
-                            modifier = Modifier.padding(16.dp),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
@@ -98,11 +148,26 @@ fun DashboardScreen(
                                 tint = MaterialTheme.colorScheme.error
                             )
                             Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = globalAnnouncement,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                if (globalAnnouncement.title.isNotBlank()) {
+                                    Text(
+                                        text = globalAnnouncement.title,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                }
+                                Text(
+                                    text = globalAnnouncement.message,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                            IconButton(onClick = {
+                                prefs.edit().putBoolean("dismissed_${globalAnnouncement.id}", true).apply()
+                                isGlobalDismissed = true
+                            }) {
+                                Icon(Icons.Default.Close, "Fechar", tint = MaterialTheme.colorScheme.error)
+                            }
                         }
                     }
                 }
@@ -176,6 +241,7 @@ fun DashboardScreen(
                 Row(modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     ActionButton(title = "Agenda", icon = Icons.Default.Event, modifier = Modifier.weight(1f), onClick = onViewAgenda)
                     ActionButton(title = "Serviços", icon = Icons.Default.ContentCut, modifier = Modifier.weight(1f), onClick = onManageServices)
+                    ActionButton(title = "Relatórios", icon = Icons.Default.TrendingUp, modifier = Modifier.weight(1f), onClick = onFinancialClick)
                 }
             }
 

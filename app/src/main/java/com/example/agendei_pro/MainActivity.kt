@@ -34,6 +34,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import com.example.agendei_pro.core.auth.AuthManager
 import com.example.agendei_pro.core.service.NotificationService
 import com.example.agendei_pro.ui.screens.*
@@ -81,6 +83,7 @@ class MainActivity : ComponentActivity() {
                 val clientAppointments by viewModel.clientAppointments.collectAsState()
                 val pendingSalonAppointments by viewModel.pendingSalonAppointments.collectAsState()
                 val globalAnnouncement by viewModel.globalAnnouncement.collectAsState()
+                val salonAnnouncement by viewModel.salonAnnouncement.collectAsState()
                 val navController = rememberNavController()
                 val scope = rememberCoroutineScope()
                 val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -144,14 +147,70 @@ class MainActivity : ComponentActivity() {
                                         style = MaterialTheme.typography.titleLarge
                                     )
                                 }
-                                NavigationDrawerItem(label = { Text("Meu Perfil") }, selected = false, onClick = { scope.launch { drawerState.close() }; navController.navigate("profile") })
-                                NavigationDrawerItem(label = { Text("Temas") }, selected = false, onClick = { scope.launch { drawerState.close() }; navController.navigate("themes") })
-                                if (isProVersion) {
-                                    NavigationDrawerItem(label = { Text("Ajustes do Salão") }, selected = false, onClick = { scope.launch { drawerState.close() }; navController.navigate("salon_settings") })
-                                }
-                                
-                                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                                NavigationDrawerItem(label = { Text("Sair") }, selected = false, onClick = { scope.launch { drawerState.close() }; viewModel.logout() })
+                                NavigationDrawerItem(
+                                     label = { Text("Meu Perfil") },
+                                     icon = { Icon(Icons.Default.AccountCircle, null) },
+                                     selected = false,
+                                     onClick = { scope.launch { drawerState.close() }; navController.navigate("profile") }
+                                 )
+                                 NavigationDrawerItem(
+                                     label = { Text("Temas") },
+                                     icon = { Icon(Icons.Default.Palette, null) },
+                                     selected = false,
+                                     onClick = { scope.launch { drawerState.close() }; navController.navigate("themes") }
+                                 )
+                                 NavigationDrawerItem(
+                                     label = { Text("Meus Agendamentos") },
+                                     icon = { Icon(Icons.Default.EventNote, null) },
+                                     selected = false,
+                                     onClick = { scope.launch { drawerState.close() }; navController.navigate("client_appointments") }
+                                 )
+                                 if (isProVersion) {
+                                     NavigationDrawerItem(
+                                         label = { Text("Carteira de Clientes") },
+                                         icon = { Icon(Icons.Default.People, null) },
+                                         selected = false,
+                                         onClick = { scope.launch { drawerState.close() }; navController.navigate("salon_clients") }
+                                     )
+                                     NavigationDrawerItem(
+                                         label = { Text("Minha Equipe") },
+                                         icon = { Icon(Icons.Default.Groups, null) },
+                                         selected = false,
+                                         onClick = { scope.launch { drawerState.close() }; navController.navigate("team") }
+                                     )
+                                     NavigationDrawerItem(
+                                         label = { Text("Promover Salão") },
+                                         icon = { Icon(Icons.Default.Campaign, null) },
+                                         selected = false,
+                                         onClick = { scope.launch { drawerState.close() }; navController.navigate("salon_promotion") }
+                                     )
+                                     NavigationDrawerItem(
+                                         label = { Text("Desempenho & Finanças") },
+                                         icon = { Icon(Icons.Default.TrendingUp, null) },
+                                         selected = false,
+                                         onClick = { scope.launch { drawerState.close() }; navController.navigate("salon_performance") }
+                                     )
+                                     NavigationDrawerItem(
+                                         label = { Text("Fila de Espera") },
+                                         icon = { Icon(Icons.Default.HourglassEmpty, null) },
+                                         selected = false,
+                                         onClick = { scope.launch { drawerState.close() }; navController.navigate("salon_waiting_list") }
+                                     )
+                                     NavigationDrawerItem(
+                                         label = { Text("Ajustes do Salão") },
+                                         icon = { Icon(Icons.Default.Settings, null) },
+                                         selected = false,
+                                         onClick = { scope.launch { drawerState.close() }; navController.navigate("salon_settings") }
+                                     )
+                                 }
+                                 
+                                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                                 NavigationDrawerItem(
+                                     label = { Text("Sair") },
+                                     icon = { Icon(Icons.Default.Logout, null) },
+                                     selected = false,
+                                     onClick = { scope.launch { drawerState.close() }; viewModel.logout() }
+                                 )
                             }
                         }
                     ) {
@@ -166,11 +225,15 @@ class MainActivity : ComponentActivity() {
                                         )
                                         is AuthState.AuthenticatedNoSalon -> RegisterSalonScreen { n, a, p, s -> viewModel.registerSalon(n, a, p, s) }
                                         is AuthState.TrialExpired -> {
-                                            val price by viewModel.subscriptionPrice.collectAsState()
+                                            val bronzePrice by viewModel.subscriptionPriceBronze.collectAsState()
+                                            val prataPrice by viewModel.subscriptionPricePrata.collectAsState()
+                                            val ouroPrice by viewModel.subscriptionPriceOuro.collectAsState()
                                             SubscriptionScreen(
                                                 salonName = state.salon.name,
-                                                price = price,
-                                                onSubscribe = { /* Integrar com Billing depois */ },
+                                                bronzePrice = bronzePrice,
+                                                prataPrice = prataPrice,
+                                                ouroPrice = ouroPrice,
+                                                onSubscribe = { plan, maxProfs -> viewModel.subscribeToPlan(plan, maxProfs) },
                                                 onLogout = { viewModel.logout() }
                                             )
                                         }
@@ -185,6 +248,7 @@ class MainActivity : ComponentActivity() {
                                             globalAnnouncement = globalAnnouncement,
                                             onManageServices = { navController.navigate("services") },
                                             onViewAgenda = { navController.navigate("agenda") },
+                                            onFinancialClick = { navController.navigate("salon_performance") },
                                             onUpdateStatus = { id, s -> viewModel.updateAppointmentStatus(id, s) },
                                             onSettingsClick = { scope.launch { drawerState.open() } },
                                             onThemeClick = { navController.navigate("themes") },
@@ -206,11 +270,14 @@ class MainActivity : ComponentActivity() {
                                                 loyaltyReward = loyaltyReward,
                                                 completedCount = state.completedCount,
                                                 lastCompletedAppointment = state.lastCompletedAppointment,
+                                                loyaltyState = state.loyaltyState,
                                                 globalAnnouncement = globalAnnouncement,
+                                                salonAnnouncement = salonAnnouncement,
                                                 onNewAppointment = { navController.navigate("scheduling/${binding.salonId}") },
                                                 onReorderAppointment = { appt ->
                                                     navController.navigate("scheduling/${binding.salonId}?serviceId=${appt.serviceId}")
                                                 },
+                                                onMyAppointmentsClick = { navController.navigate("client_appointments") },
                                                 onUnlinkSalon = { viewModel.unlinkCurrentSalon(binding.salonId) },
                                                 onDeleteAppointment = { viewModel.deleteAppointment(it) },
                                                 onProfileClick = { navController.navigate("profile") },
@@ -232,9 +299,10 @@ class MainActivity : ComponentActivity() {
 
                                     ProfileScreen(
                                         currentName = userProfile?.name ?: "",
+                                        currentPhoneNumber = userProfile?.phoneNumber ?: "",
                                         userPhotoUrl = userProfile?.photoUrl,
                                         subscriptionStatus = subscriptionStatusText,
-                                        onSaveName = { viewModel.updateProfileName(it) },
+                                        onSaveProfile = { name, phone -> viewModel.updateProfile(name, phone) },
                                         onLogout = { viewModel.logout() },
                                         onDeleteAccount = { viewModel.deleteUserAccount { navController.popBackStack() } },
                                         onThemeClick = { navController.navigate("themes") },
@@ -242,8 +310,12 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                                 composable("themes") { ThemeSelectionScreen(selectedTheme.id, { viewModel.setTheme(it) }, { navController.popBackStack() }) }
+                                composable("salon_promotion") { SalonPromotionScreen { navController.popBackStack() } }
                                 composable("services") { ManageServicesScreen { navController.popBackStack() } }
+                                composable("team") { ManageTeamScreen { navController.popBackStack() } }
                                 composable("agenda") { AgendaScreen(onUpdateStatus = { id, s -> viewModel.updateAppointmentStatus(id, s) }, onNavigateBack = { navController.popBackStack() }) }
+                                composable("salon_performance") { SalonPerformanceScreen { navController.popBackStack() } }
+                                composable("salon_waiting_list") { SalonWaitingListScreen { navController.popBackStack() } }
                                 composable("salon_settings") {
                                     val state = authState as? AuthState.AuthenticatedWithSalon
                                     val uploadProgress by viewModel.uploadProgress.collectAsState()
@@ -261,13 +333,28 @@ class MainActivity : ComponentActivity() {
                                         currentHasLoyalty = state?.salon?.hasLoyaltyProgram ?: false,
                                         currentLoyaltyRequired = state?.salon?.loyaltyRequiredServices ?: 10,
                                         currentLoyaltyReward = state?.salon?.loyaltyRewardDescription ?: "Corte Grátis",
+                                        currentAutoValidateLoyalty = state?.salon?.autoValidateLoyalty ?: false,
+                                        currentLoyaltyRedemptionDays = state?.salon?.loyaltyRedemptionDays ?: 30,
+                                        currentSlotInterval = state?.salon?.slotIntervalMinutes ?: 30,
+                                        currentIsIndividualized = state?.salon?.isConfigurationIndividualized ?: false,
                                         uploadProgress = uploadProgress,
-                                        onSave = { name, o, c, bs, be, d, a, s, seg, hl, lr, lrd -> 
-                                            viewModel.updateSalonSettings(name, o, c, bs, be, d, a, s, seg, hl, lr, lrd)
+                                        onSave = { name, o, c, bs, be, d, a, s, seg, hl, lr, lrd, avl, lrdays, slotInt, isIndiv -> 
+                                            viewModel.updateSalonSettings(name, o, c, bs, be, d, a, s, seg, hl, lr, lrd, avl, lrdays, slotInt, isIndiv)
                                             navController.popBackStack()
                                         },
                                         onLogoSelected = { uri -> viewModel.uploadSalonLogo(uri) },
                                         onRemoveLogo = { viewModel.uploadSalonLogo(android.net.Uri.EMPTY) },
+                                        onNavigateBack = { navController.popBackStack() }
+                                    )
+                                }
+                                composable("salon_clients") {
+                                    val state = authState as? AuthState.AuthenticatedWithSalon
+                                    val loyaltyRequired = state?.salon?.loyaltyRequiredServices ?: 10
+                                    val loyaltyReward = state?.salon?.loyaltyRewardDescription ?: "Corte Grátis"
+                                    SalonClientsScreen(
+                                     viewModel = viewModel,
+                                        loyaltyRequired = loyaltyRequired,
+                                        loyaltyReward = loyaltyReward,
                                         onNavigateBack = { navController.popBackStack() }
                                     )
                                 }
@@ -283,9 +370,14 @@ class MainActivity : ComponentActivity() {
                                     SchedulingScreen(
                                         salonId = salonId,
                                         preselectedServiceId = serviceId,
+                                        userProfile = userProfile,
+                                        onSavePhone = { phone -> viewModel.updateProfile(userProfile?.name ?: "Cliente", phone) },
                                         onNavigateBack = { navController.popBackStack() },
                                         onSuccess = { navController.popBackStack() }
                                     )
+                                }
+                                composable("client_appointments") {
+                                    ClientAppointmentsScreen { navController.popBackStack() }
                                 }
                             }
                         }

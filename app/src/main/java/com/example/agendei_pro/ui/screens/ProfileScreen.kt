@@ -21,15 +21,17 @@ import com.example.agendei_pro.ui.theme.Agendei_PROTheme
 @Composable
 fun ProfileScreen(
     currentName: String,
+    currentPhoneNumber: String,
     userPhotoUrl: String?,
     subscriptionStatus: String? = null,
-    onSaveName: (String) -> Unit,
+    onSaveProfile: (String, String) -> Unit,
     onLogout: () -> Unit,
     onDeleteAccount: () -> Unit,
     onThemeClick: () -> Unit,
     onNavigateBack: () -> Unit
 ) {
     var name by remember { mutableStateOf(currentName) }
+    var phoneNumber by remember { mutableStateOf(currentPhoneNumber) }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -93,13 +95,32 @@ fun ProfileScreen(
                 singleLine = true
             )
 
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = phoneNumber,
+                onValueChange = { phoneNumber = it },
+                label = { Text("Seu WhatsApp / Telefone") },
+                placeholder = { Text("(11) 99999-9999") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = "Seu telefone será compartilhado com os salões onde você realizar agendamentos para fins de contato e suporte (em conformidade com a LGPD).",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+
             Spacer(modifier = Modifier.height(16.dp))
 
             Button(
-                onClick = { onSaveName(name) },
+                onClick = { onSaveProfile(name, phoneNumber) },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
-                enabled = name.isNotBlank() && name != currentName
-            ) { Text("Salvar Alterações de Nome") }
+                enabled = (name.isNotBlank() && name != currentName) || (phoneNumber != currentPhoneNumber)
+            ) { Text("Salvar Alterações") }
 
             Spacer(modifier = Modifier.height(24.dp))
 

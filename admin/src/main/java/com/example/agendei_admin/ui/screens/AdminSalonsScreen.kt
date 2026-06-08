@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Work
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,6 +35,7 @@ fun AdminSalonsScreen(onBack: () -> Unit) {
     val db = FirebaseFirestore.getInstance()
     val salonRepo = remember { SalonRepository() }
     val context = LocalContext.current
+    var editingSalonPlan by remember { mutableStateOf<Salon?>(null) }
 
     LaunchedEffect(Unit) {
         // Buscamos os documentos e mapeamos o ID manualmente para garantir que nunca falhe
@@ -63,27 +65,87 @@ fun AdminSalonsScreen(onBack: () -> Unit) {
             )
         }
     ) { padding ->
-        LazyColumn(modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp)) {
-            items(salons, key = { it.id }) { salon ->
-                val ownerProfile = userProfiles[salon.ownerUid]
-                val remainingDays = salonRepo.getRemainingTrialDays(salon)
-                
-                SalonDetailCard(
-                    salon = salon,
-                    ownerEmail = ownerProfile?.email ?: "Carregando...",
-                    remainingDays = remainingDays,
-                    onTogglePremium = {
-                        val newState = !salon.isSubscribed
-                        // USAMOS O ID GARANTIDO AQUI!
-                        db.collection("salons").document(salon.id)
-                            .update("isSubscribed", newState)
-                            .addOnSuccessListener {
-                                val msg = if (newState) "Premium ATIVADO!" else "Premium REMOVIDO!"
-                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+            LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+                items(salons, key = { it.id }) { salon ->
+                    val ownerProfile = userProfiles[salon.ownerUid]
+                    val remainingDays = salonRepo.getRemainingTrialDays(salon)
+                    
+                    SalonDetailCard(
+                        salon = salon,
+                        ownerEmail = ownerProfile?.email ?: "Carregando...",
+                        remainingDays = remainingDays,
+                        onTogglePremium = {
+                            editingSalonPlan = salon
+                        }
+                    )
+                }
+            }
+
+            if (editingSalonPlan != null) {
+                val salon = editingSalonPlan!!
+                var selectedPlan by remember { mutableStateOf(salon.subscriptionPlan) }
+                var maxProfs by remember { mutableStateOf(salon.maxProfessionals) }
+
+                AlertDialog(
+                    onDismissRequest = { editingSalonPlan = null },
+                    title = { Text("Mudar Plano - ${salon.name}") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Selecione o novo plano de assinatura:")
+                            
+                            val plans = listOf(
+                                Triple("TRIAL", 2, "Trial/Gratuito (2 Profs)"),
+                                Triple("BRONZE", 2, "Bronze (2 Profs - R$ 110,00)"),
+                                Triple("PRATA", 5, "Prata (5 Profs - R$ 150,00)"),
+                                Triple("OURO", 10, "Ouro (10 Profs - R$ 200,00)")
+                            )
+
+                            plans.forEach { (planName, limit, label) ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                ) {
+                                    RadioButton(
+                                        selected = selectedPlan == planName,
+                                        onClick = {
+                                            selectedPlan = planName
+                                            maxProfs = limit
+                                        }
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(label)
+                                }
                             }
-                            .addOnFailureListener { e ->
-                                Toast.makeText(context, "ERRO: ${e.message}", Toast.LENGTH_LONG).show()
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                db.collection("salons").document(salon.id)
+                                    .update(mapOf(
+                                        "subscriptionPlan" to selectedPlan,
+                                        "maxProfessionals" to maxProfs,
+                                        "isSubscribed" to (selectedPlan != "TRIAL")
+                                    ))
+                                    .addOnSuccessListener {
+                                        Toast.makeText(context, "Plano atualizado!", Toast.LENGTH_SHORT).show()
+                                        editingSalonPlan = null
+                                    }
+                                    .addOnFailureListener { e ->
+                                        Toast.makeText(context, "Erro: ${e.message}", Toast.LENGTH_LONG).show()
+                                    }
                             }
+                        ) {
+                            Text("Salvar")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { editingSalonPlan = null }) {
+                            Text("Cancelar")
+                        }
                     }
                 )
             }
@@ -111,7 +173,7 @@ fun SalonDetailCard(
                     modifier = Modifier.weight(1f)
                 )
                 
-                val statusText = if (salon.isSubscribed) "PREMIUM" else if (remainingDays > 0) "TRIAL" else "EXPIRADO"
+                val statusText = if (salon.isSubscribed) salon.subscriptionPlan else if (remainingDays > 0) "TRIAL" else "EXPIRADO"
                 val statusColor = if (salon.isSubscribed) Color(0xFF4CAF50) else if (remainingDays > 0) Color(0xFF2196F3) else Color(0xFFF44336)
                 
                 Surface(
@@ -132,6 +194,7 @@ fun SalonDetailCard(
             
             InfoRow(Icons.Default.Email, ownerEmail)
             InfoRow(Icons.Default.Work, salon.segment)
+            InfoRow(Icons.Default.People, "Plano: ${salon.subscriptionPlan} (Limite: ${salon.maxProfessionals} Prof.)")
             
             if (!salon.isSubscribed) {
                 val trialDateStr = salon.trialStartDate?.let { 
@@ -153,12 +216,12 @@ fun SalonDetailCard(
                 Button(
                     onClick = onTogglePremium,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (salon.isSubscribed) Color(0xFFE91E63) else Color(0xFF4CAF50)
+                        containerColor = MaterialTheme.colorScheme.primary
                     )
                 ) {
                     Icon(Icons.Default.CardGiftcard, null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(if (salon.isSubscribed) "Remover Premium" else "Dar Premium Vitalício")
+                    Text("Gerenciar Plano")
                 }
             }
         }

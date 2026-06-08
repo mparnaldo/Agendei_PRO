@@ -66,6 +66,18 @@ class AppointmentRepository {
             }
         awaitClose { subscription.remove() }
     }
+
+    fun getMyCompleteAppointments(): Flow<List<Appointment>> = callbackFlow {
+        val user = auth.currentUser ?: run { trySend(emptyList()); close(); return@callbackFlow }
+        val subscription = firestore.collection("appointments")
+            .whereEqualTo("clientUid", user.uid)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) return@addSnapshotListener
+                val list = snapshot?.toObjects(Appointment::class.java) ?: emptyList()
+                trySend(list.sortedByDescending { it.date ?: Date(0) })
+            }
+        awaitClose { subscription.remove() }
+    }
     
     suspend fun createAppointment(appointment: Appointment): Result<Unit> {
         return try {
@@ -90,13 +102,52 @@ class AppointmentRepository {
         }
     }
 
-    suspend fun updateAppointmentStatus(id: String, status: String): Result<Unit> = try {
-        firestore.collection("appointments").document(id).update("status", status).await()
+    suspend fun updateAppointmentStatus(id: String, status: String, validateLoyalty: Boolean = false): Result<Unit> = try {
+        val updates = mutableMapOf<String, Any>("status" to status)
+        if (validateLoyalty) {
+            updates["loyaltyValidated"] = true
+        }
+        firestore.collection("appointments").document(id).update(updates).await()
+        Result.success(Unit)
+    } catch (e: Exception) { Result.failure(e) }
+
+    suspend fun updateLoyaltyValidation(id: String, validated: Boolean): Result<Unit> = try {
+        firestore.collection("appointments").document(id).update("loyaltyValidated", validated).await()
         Result.success(Unit)
     } catch (e: Exception) { Result.failure(e) }
 
     suspend fun deleteAppointment(id: String): Result<Unit> = try {
         firestore.collection("appointments").document(id).delete().await()
+        Result.success(Unit)
+    } catch (e: Exception) { Result.failure(e) }
+
+    suspend fun redeemLoyaltyRewards(clientUid: String, salonId: String, limit: Int, professionalId: String? = null): Result<Unit> = try {
+        var query = firestore.collection("appointments")
+            .whereEqualTo("clientUid", clientUid)
+            .whereEqualTo("salonId", salonId)
+            .whereEqualTo("status", "CONFIRMED")
+            .whereEqualTo("loyaltyValidated", true)
+            
+        if (professionalId != null) {
+            query = query.whereEqualTo("professionalId", professionalId)
+        }
+        
+        val snapshots = query.get().await()
+        
+        val unredeemedAppts = snapshots.documents
+            .filter { !(it.getBoolean("loyaltyRedeemed") ?: false) }
+            .sortedBy { it.getDate("date") ?: Date(0) }
+            .take(limit)
+            
+        if (unredeemedAppts.isEmpty()) {
+            throw Exception("Nenhum selo ativo disponível para resgate")
+        }
+
+        val batch = firestore.batch()
+        for (doc in unredeemedAppts) {
+            batch.update(doc.reference, "loyaltyRedeemed", true)
+        }
+        batch.commit().await()
         Result.success(Unit)
     } catch (e: Exception) { Result.failure(e) }
 }

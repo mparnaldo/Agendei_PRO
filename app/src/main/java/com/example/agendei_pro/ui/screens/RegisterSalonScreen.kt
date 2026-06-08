@@ -10,6 +10,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.agendei_pro.ui.theme.Agendei_PROTheme
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCut
+import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Brush
+import androidx.compose.material.icons.filled.Spa
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
+
 @Composable
 fun RegisterSalonScreen(
     onRegisterClick: (String, String, String, String) -> Unit
@@ -72,18 +81,51 @@ fun RegisterSalonScreen(
         Text(
             text = "Selecione o Ramo de Atividade",
             style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.align(Alignment.Start).padding(bottom = 8.dp),
+            modifier = Modifier.align(Alignment.Start).padding(bottom = 12.dp),
             fontWeight = FontWeight.Bold
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SegmentButton(label = "💈 Barbearia", selected = selectedSegment == "BARBEARIA", onClick = { selectedSegment = "BARBEARIA" }, modifier = Modifier.weight(1f))
-                SegmentButton(label = "💇 Salão/Cabelo", selected = selectedSegment == "CABELEIREIRO", onClick = { selectedSegment = "CABELEIREIRO" }, modifier = Modifier.weight(1f))
+                SegmentCard(
+                    label = "Barbearia",
+                    icon = Icons.Default.ContentCut,
+                    selected = selectedSegment == "BARBEARIA",
+                    onClick = { selectedSegment = "BARBEARIA" },
+                    modifier = Modifier.weight(1f)
+                )
+                SegmentCard(
+                    label = "Salão / Cabelo",
+                    icon = Icons.Default.Face,
+                    selected = selectedSegment == "CABELEIREIRO",
+                    onClick = { selectedSegment = "CABELEIREIRO" },
+                    modifier = Modifier.weight(1f)
+                )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SegmentButton(label = "💅 Manicure", selected = selectedSegment == "MANICURE", onClick = { selectedSegment = "MANICURE" }, modifier = Modifier.weight(1f))
-                SegmentButton(label = "✨ Estética", selected = selectedSegment == "ESTETICA", onClick = { selectedSegment = "ESTETICA" }, modifier = Modifier.weight(1f))
+                SegmentCard(
+                    label = "Manicure",
+                    icon = Icons.Default.Brush,
+                    selected = selectedSegment == "MANICURE",
+                    onClick = { selectedSegment = "MANICURE" },
+                    modifier = Modifier.weight(1f)
+                )
+                SegmentCard(
+                    label = "Estética",
+                    icon = Icons.Default.Spa,
+                    selected = selectedSegment == "ESTETICA",
+                    onClick = { selectedSegment = "ESTETICA" },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SegmentCard(
+                    label = "Estúdio de Tattoo",
+                    icon = Icons.Default.Palette,
+                    selected = selectedSegment == "TATTOO",
+                    onClick = { selectedSegment = "TATTOO" },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
 
@@ -116,14 +158,59 @@ fun RegisterSalonScreen(
 }
 
 @Composable
-fun SegmentButton(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    if (selected) {
-        Button(onClick = onClick, modifier = modifier.height(48.dp)) {
-            Text(label, fontWeight = FontWeight.Bold)
-        }
+private fun SegmentCard(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val cardColor = if (selected) {
+        MaterialTheme.colorScheme.primaryContainer
     } else {
-        OutlinedButton(onClick = onClick, modifier = modifier.height(48.dp)) {
-            Text(label)
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+    }
+    
+    val contentColor = if (selected) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    val border = if (selected) {
+        BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+    } else {
+        BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = cardColor),
+        border = border,
+        modifier = modifier
+            .height(56.dp)
+            .clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Start
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = contentColor,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = label,
+                color = contentColor,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                )
+            )
         }
     }
 }

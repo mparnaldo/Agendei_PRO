@@ -15,6 +15,10 @@ enum class AgendaViewMode {
     LIST, CALENDAR_DAY, CALENDAR_MONTH
 }
 
+enum class AgendaSortMode {
+    DATE_ASC, DATE_DESC
+}
+
 class AgendaViewModel(private val repository: AppointmentRepository = AppointmentRepository()) : ViewModel() {
 
     private val auth = FirebaseAuth.getInstance()
@@ -23,8 +27,27 @@ class AgendaViewModel(private val repository: AppointmentRepository = Appointmen
     private val _selectedDate = MutableStateFlow(Date())
     val selectedDate: StateFlow<Date> = _selectedDate
 
+    private val _salonHasLoyalty = MutableStateFlow(false)
+    val salonHasLoyalty: StateFlow<Boolean> = _salonHasLoyalty
+
+    init {
+        val id = salonId
+        if (id != null) {
+            viewModelScope.launch {
+                val salon = com.example.agendei_pro.core.repository.SalonRepository().getSalonById(id)
+                _salonHasLoyalty.value = salon?.hasLoyaltyProgram ?: false
+            }
+        }
+    }
+
     private val _viewMode = MutableStateFlow(AgendaViewMode.LIST)
     val viewMode: StateFlow<AgendaViewMode> = _viewMode
+
+    private val _sortMode = MutableStateFlow(AgendaSortMode.DATE_ASC)
+    val sortMode: StateFlow<AgendaSortMode> = _sortMode
+
+    private val _currentMonth = MutableStateFlow(Calendar.getInstance())
+    val currentMonth: StateFlow<Calendar> = _currentMonth
 
     // Agendamentos do dia selecionado
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -44,11 +67,16 @@ class AgendaViewModel(private val repository: AppointmentRepository = Appointmen
         )
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val allAppointments: StateFlow<List<Appointment>> = _selectedDate
-        .flatMapLatest { _ ->
+    val allAppointments: StateFlow<List<Appointment>> = combine(_sortMode, _selectedDate) { sort, _ -> sort }
+        .flatMapLatest { sort ->
             val id = salonId
             if (id != null) {
-                repository.getAllSalonAppointments(id)
+                repository.getAllSalonAppointments(id).map { list ->
+                    when (sort) {
+                        AgendaSortMode.DATE_ASC -> list.sortedBy { it.date }
+                        AgendaSortMode.DATE_DESC -> list.sortedByDescending { it.date }
+                    }
+                }
             } else {
                 flowOf(emptyList())
             }
@@ -63,13 +91,34 @@ class AgendaViewModel(private val repository: AppointmentRepository = Appointmen
         _selectedDate.value = date
     }
 
+    fun setSortMode(mode: AgendaSortMode) {
+        _sortMode.value = mode
+    }
+
+    fun navigateMonth(delta: Int) {
+        val newCal = (_currentMonth.value.clone() as Calendar).apply {
+            add(Calendar.MONTH, delta)
+        }
+        _currentMonth.value = newCal
+    }
+
     fun setViewMode(mode: AgendaViewMode) {
         _viewMode.value = mode
     }
 
     fun updateStatus(appointmentId: String, status: String) {
+        val id = salonId
         viewModelScope.launch {
-            repository.updateAppointmentStatus(appointmentId, status)
+            val autoValidate = if (id != null) {
+                com.example.agendei_pro.core.repository.SalonRepository().getSalonById(id)?.autoValidateLoyalty ?: false
+            } else false
+            repository.updateAppointmentStatus(appointmentId, status, validateLoyalty = (status == "CONFIRMED" && autoValidate))
+        }
+    }
+
+    fun updateLoyaltyValidation(id: String, validated: Boolean) {
+        viewModelScope.launch {
+            repository.updateLoyaltyValidation(id, validated)
         }
     }
 
@@ -79,9 +128,8 @@ class AgendaViewModel(private val repository: AppointmentRepository = Appointmen
         }
     }
 
-    fun blockTimeSlot(timeStr: String, reason: String) {
+    fun blockTimeSlot(date: Date, timeStr: String, reason: String, professionalId: String, professionalName: String) {
         val id = salonId ?: return
-        val date = _selectedDate.value
         viewModelScope.launch {
             try {
                 val timeParts = timeStr.split(":")
@@ -100,7 +148,9 @@ class AgendaViewModel(private val repository: AppointmentRepository = Appointmen
                     serviceName = "Ausência",
                     servicePrice = 0.0,
                     date = cal.time,
-                    status = "BLOCKED"
+                    status = "BLOCKED",
+                    professionalId = professionalId,
+                    professionalName = professionalName
                 )
                 repository.createAppointment(appt)
             } catch (e: Exception) {}

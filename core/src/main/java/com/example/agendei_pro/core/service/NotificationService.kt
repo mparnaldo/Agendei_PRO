@@ -19,6 +19,8 @@ import com.google.firebase.firestore.ListenerRegistration
 class NotificationService : Service() {
 
     private var listenerRegistration: ListenerRegistration? = null
+    private val activeRegistrations = mutableListOf<ListenerRegistration>()
+    private val salonPromoRegistrations = mutableMapOf<String, ListenerRegistration>()
     private val firestore = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
 
@@ -49,7 +51,7 @@ class NotificationService : Service() {
                 "Serviço de Notificações em Segundo Plano",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Mantém a sincronização de agendamentos em tempo real ativa"
+                description = "Mantém a sincronização de agendamentos em tempo real activa"
             }
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
@@ -89,6 +91,10 @@ class NotificationService : Service() {
 
     private fun setupFirestoreListener(userId: String) {
         listenerRegistration?.remove()
+        activeRegistrations.forEach { it.remove() }
+        activeRegistrations.clear()
+        salonPromoRegistrations.values.forEach { it.remove() }
+        salonPromoRegistrations.clear()
 
         val isProVersion = packageName == "com.example.agendei_pro"
 
@@ -113,9 +119,13 @@ class NotificationService : Service() {
                         for (appt in newAppts) {
                             val isConfirmed = appt.status == "CONFIRMED"
                             val title = if (isConfirmed) "Agendamento Automático ✅" else "Novo Agendamento 📅"
+                            val timeStr = if (appt.date != null) {
+                                val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale.US)
+                                sdf.format(appt.date)
+                            } else ""
                             val body = if (isConfirmed) 
-                                "${appt.clientName} agendou ${appt.serviceName} (Confirmado)" 
-                                else "${appt.clientName} agendou ${appt.serviceName}"
+                                "Novo agendamento com ${appt.clientName} às $timeStr (${appt.professionalName}) - Confirmado" 
+                                else "Novo agendamento com ${appt.clientName} às $timeStr (${appt.professionalName})"
                             showNotification(title, body)
                         }
                         seenAppointmentIds.clear()
@@ -153,7 +163,85 @@ class NotificationService : Service() {
                         appointmentStatuses.keys.retainAll(currentIds)
                     }
                 }
+
+            // Client-side dynamically registered listeners for salon promotions
+            val clientBindingsReg = firestore.collection("user_bindings")
+                .whereEqualTo("userId", userId)
+                .addSnapshotListener { bindingsSnapshot, error ->
+                    if (error != null || bindingsSnapshot == null) return@addSnapshotListener
+                    
+                    val activeSalonIds = bindingsSnapshot.documents.mapNotNull { it.getString("salonId") }.toSet()
+                    
+                    val toRemove = salonPromoRegistrations.keys.filter { it !in activeSalonIds }
+                    for (sid in toRemove) {
+                        salonPromoRegistrations[sid]?.remove()
+                        salonPromoRegistrations.remove(sid)
+                    }
+                    
+                    for (sid in activeSalonIds) {
+                        if (sid !in salonPromoRegistrations) {
+                            var initialPromoLoad = true
+                            val seenPromoIds = mutableSetOf<String>()
+                            
+                            val promoReg = firestore.collection("salons").document(sid)
+                                .collection("promotions")
+                                .addSnapshotListener { promoSnapshot, promoError ->
+                                    if (promoError != null || promoSnapshot == null) return@addSnapshotListener
+                                    
+                                    val promoIds = promoSnapshot.documents.mapNotNull { it.id }.toSet()
+                                    
+                                    if (initialPromoLoad) {
+                                        seenPromoIds.addAll(promoIds)
+                                        initialPromoLoad = false
+                                    } else {
+                                        val newPromos = promoSnapshot.documents.filter { it.id !in seenPromoIds }
+                                        for (doc in newPromos) {
+                                            val title = doc.getString("title") ?: "Novidade no Salão!"
+                                            val msg = doc.getString("message") ?: ""
+                                            showNotification(title, msg)
+                                        }
+                                        seenPromoIds.clear()
+                                        seenPromoIds.addAll(promoIds)
+                                    }
+                                }
+                            salonPromoRegistrations[sid] = promoReg
+                        }
+                    }
+                }
+            activeRegistrations.add(clientBindingsReg)
         }
+
+        // Shared background listeners for Admin Broadcast notifications
+        var initialBroadcastLoad = true
+        val broadcastConfigName = if (isProVersion) {
+            "announcement_salons"
+        } else {
+            "announcement_clients"
+        }
+        
+        val regBroadcast = firestore.collection("config").document(broadcastConfigName)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                val id = snapshot.getString("id") ?: return@addSnapshotListener
+                val title = snapshot.getString("title") ?: "Aviso"
+                val msg = snapshot.getString("message") ?: ""
+                
+                val prefs = getSharedPreferences("notification_service_prefs", Context.MODE_PRIVATE)
+                val lastSeenId = prefs.getString("last_seen_broadcast_id", null)
+                
+                if (initialBroadcastLoad) {
+                    initialBroadcastLoad = false
+                    if (lastSeenId == null) {
+                        prefs.edit().putString("last_seen_broadcast_id", id).apply()
+                    }
+                } else {
+                    if (id != lastSeenId) {
+                        prefs.edit().putString("last_seen_broadcast_id", id).apply()
+                        showNotification(title, msg)
+                    }
+                }
+            }
+        activeRegistrations.add(regBroadcast)
     }
 
     private fun fetchSalonNameAndNotify(appt: Appointment) {
@@ -180,6 +268,10 @@ class NotificationService : Service() {
 
     override fun onDestroy() {
         listenerRegistration?.remove()
+        activeRegistrations.forEach { it.remove() }
+        activeRegistrations.clear()
+        salonPromoRegistrations.values.forEach { it.remove() }
+        salonPromoRegistrations.clear()
         super.onDestroy()
     }
 

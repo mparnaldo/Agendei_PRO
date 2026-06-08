@@ -7,5 +7,6 @@ data class Service(
     val price: Double = 0.0,
     val durationMinutes: Int = 30,
     val category: String = "GERAL",
-    val observation: String = ""
+    val observation: String = "",
+    val imageUrl: String = ""
 )

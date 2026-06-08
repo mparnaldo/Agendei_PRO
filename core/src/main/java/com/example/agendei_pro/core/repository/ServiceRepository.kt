@@ -3,6 +3,8 @@ package com.example.agendei_pro.core.repository
 import com.example.agendei_pro.core.model.Service
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.storage.FirebaseStorage
+import android.net.Uri
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -11,7 +13,20 @@ import kotlinx.coroutines.tasks.await
 class ServiceRepository {
     private val firestore = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
+    private val storage = FirebaseStorage.getInstance()
     private val salonId: String? get() = auth.currentUser?.uid
+
+    suspend fun uploadServiceImage(imageUri: Uri): Result<String> {
+        val id = salonId ?: return Result.failure(Exception("Não autorizado"))
+        val ref = storage.reference.child("salons/$id/services/${System.currentTimeMillis()}.jpg")
+        return try {
+            ref.putFile(imageUri).await()
+            val url = ref.downloadUrl.await().toString()
+            Result.success(url)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 
     fun getServices(providedSalonId: String? = null): Flow<List<Service>> = callbackFlow {
         val id = providedSalonId ?: salonId

@@ -20,6 +20,9 @@ class ServicesViewModel(
     private val _salonSegment = MutableStateFlow("BARBEARIA")
     val salonSegment: StateFlow<String> = _salonSegment.asStateFlow()
 
+    private val _isUploadingImage = MutableStateFlow(false)
+    val isUploadingImage: StateFlow<Boolean> = _isUploadingImage.asStateFlow()
+
     init {
         viewModelScope.launch {
             salonRepository.getSalon()?.let {
@@ -35,14 +38,33 @@ class ServicesViewModel(
             initialValue = emptyList()
         )
 
-    fun addService(name: String, price: Double, duration: Int, category: String, observation: String) {
+    fun addService(
+        name: String,
+        price: Double,
+        duration: Int,
+        category: String,
+        observation: String,
+        imageUrl: String,
+        localImageUri: android.net.Uri? = null
+    ) {
         viewModelScope.launch {
+            var finalImageUrl = imageUrl
+            if (localImageUri != null && localImageUri != android.net.Uri.EMPTY) {
+                _isUploadingImage.value = true
+                repository.uploadServiceImage(localImageUri).onSuccess {
+                    finalImageUrl = it
+                }.onFailure {
+                    // Fallback para string vazia ou URL padrão
+                }
+                _isUploadingImage.value = false
+            }
             val newService = Service(
                 name = name,
                 price = price,
                 durationMinutes = duration,
                 category = category,
-                observation = observation
+                observation = observation,
+                imageUrl = finalImageUrl
             )
             repository.addService(newService)
         }

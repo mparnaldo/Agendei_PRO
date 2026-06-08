@@ -177,7 +177,11 @@ class SalonRepository {
         segment: String,
         hasLoyalty: Boolean,
         loyaltyRequired: Int,
-        loyaltyReward: String
+        loyaltyReward: String,
+        autoValidateLoyalty: Boolean,
+        loyaltyRedemptionDays: Int,
+        slotInterval: Int,
+        isIndividualized: Boolean
     ): Result<Unit> {
         val user = auth.currentUser ?: return Result.failure(Exception("Não logado"))
         return try {
@@ -193,9 +197,136 @@ class SalonRepository {
                 "segment" to segment,
                 "hasLoyaltyProgram" to hasLoyalty,
                 "loyaltyRequiredServices" to loyaltyRequired,
-                "loyaltyRewardDescription" to loyaltyReward
+                "loyaltyRewardDescription" to loyaltyReward,
+                "autoValidateLoyalty" to autoValidateLoyalty,
+                "loyaltyRedemptionDays" to loyaltyRedemptionDays,
+                "slotIntervalMinutes" to slotInterval,
+                "isConfigurationIndividualized" to isIndividualized
             )).await()
             Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getSalonClients(salonId: String): List<com.example.agendei_pro.core.model.UserProfile> {
+        return try {
+            val bindings = firestore.collection("user_bindings")
+                .whereEqualTo("salonId", salonId)
+                .get()
+                .await()
+            val uids = bindings.documents.mapNotNull { it.getString("userId") }
+            if (uids.isEmpty()) return emptyList()
+            
+            val profiles = mutableListOf<com.example.agendei_pro.core.model.UserProfile>()
+            for (uid in uids) {
+                val profileSnap = firestore.collection("profiles").document(uid).get().await()
+                val profile = profileSnap.toObject(com.example.agendei_pro.core.model.UserProfile::class.java)
+                if (profile != null) {
+                    profiles.add(profile)
+                }
+            }
+            profiles
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    // Manage Professionals
+    suspend fun getProfessionals(salonId: String): List<com.example.agendei_pro.core.model.Professional> {
+        return try {
+            val snapshot = firestore.collection("salons")
+                .document(salonId)
+                .collection("professionals")
+                .whereEqualTo("isActive", true)
+                .get()
+                .await()
+            snapshot.toObjects(com.example.agendei_pro.core.model.Professional::class.java)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun addProfessional(
+        salonId: String,
+        name: String,
+        specialties: List<String>,
+        photoUrl: String? = null
+    ): Result<com.example.agendei_pro.core.model.Professional> {
+        return try {
+            val docRef = firestore.collection("salons")
+                .document(salonId)
+                .collection("professionals")
+                .document()
+            val newPro = com.example.agendei_pro.core.model.Professional(
+                id = docRef.id,
+                salonId = salonId,
+                name = name,
+                specialties = specialties,
+                photoUrl = photoUrl,
+                isActive = true
+            )
+            docRef.set(newPro).await()
+            Result.success(newPro)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateProfessional(
+        salonId: String,
+        professional: com.example.agendei_pro.core.model.Professional
+    ): Result<Unit> {
+        return try {
+            firestore.collection("salons")
+                .document(salonId)
+                .collection("professionals")
+                .document(professional.id)
+                .set(professional)
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteProfessional(salonId: String, professionalId: String): Result<Unit> {
+        return try {
+            // Soft delete by setting isActive to false
+            firestore.collection("salons")
+                .document(salonId)
+                .collection("professionals")
+                .document(professionalId)
+                .update("isActive", false)
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateSubscriptionPlan(salonId: String, plan: String, maxProfs: Int): Result<Unit> {
+        return try {
+            firestore.collection("salons")
+                .document(salonId)
+                .update(mapOf(
+                    "subscriptionPlan" to plan,
+                    "maxProfessionals" to maxProfs,
+                    "isSubscribed" to (plan != "TRIAL")
+                ))
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun uploadProfessionalPhoto(salonId: String, professionalId: String, uri: android.net.Uri): Result<String> {
+        return try {
+            val ref = storage.reference.child("salons/$salonId/professionals/$professionalId.jpg")
+            ref.putFile(uri).await()
+            val downloadUrl = ref.downloadUrl.await().toString()
+            Result.success(downloadUrl)
         } catch (e: Exception) {
             Result.failure(e)
         }

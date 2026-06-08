@@ -17,7 +17,9 @@ import com.google.firebase.firestore.FirebaseFirestore
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminSettingsScreen(onBack: () -> Unit) {
-    var price by remember { mutableStateOf("") }
+    var priceBronze by remember { mutableStateOf("") }
+    var pricePrata by remember { mutableStateOf("") }
+    var priceOuro by remember { mutableStateOf("") }
     var alertMessage by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     
@@ -25,8 +27,10 @@ fun AdminSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
-        db.collection("config").document("pricing").get().addOnSuccessListener {
-            price = it.getString("value") ?: "49.90"
+        db.collection("config").document("pricing").get().addOnSuccessListener { doc ->
+            priceBronze = doc.getString("bronze") ?: "110.00"
+            pricePrata = doc.getString("prata") ?: "150.00"
+            priceOuro = doc.getString("ouro") ?: "200.00"
         }
         db.collection("config").document("announcement").get().addOnSuccessListener {
             alertMessage = it.getString("message") ?: ""
@@ -47,20 +51,40 @@ fun AdminSettingsScreen(onBack: () -> Unit) {
                 .fillMaxSize()
                 .padding(24.dp)
         ) {
-            Text("Assinatura Mensal", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text("Defina o valor que os salões verão na tela de assinatura.", style = MaterialTheme.typography.bodySmall)
+            Text("Valores dos Planos de Assinatura", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text("Defina os valores mensais de cada plano.", style = MaterialTheme.typography.bodySmall)
             
             Spacer(modifier = Modifier.height(16.dp))
             
             OutlinedTextField(
-                value = price,
-                onValueChange = { price = it },
-                label = { Text("Valor (Ex: 49.90)") },
+                value = priceBronze,
+                onValueChange = { priceBronze = it },
+                label = { Text("Plano Bronze (2 Profissionais)") },
                 modifier = Modifier.fillMaxWidth(),
                 leadingIcon = { Text("R$ ", modifier = Modifier.padding(start = 12.dp)) }
             )
             
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            OutlinedTextField(
+                value = pricePrata,
+                onValueChange = { pricePrata = it },
+                label = { Text("Plano Prata (5 Profissionais)") },
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = { Text("R$ ", modifier = Modifier.padding(start = 12.dp)) }
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            OutlinedTextField(
+                value = priceOuro,
+                onValueChange = { priceOuro = it },
+                label = { Text("Plano Ouro (10 Profissionais)") },
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = { Text("R$ ", modifier = Modifier.padding(start = 12.dp)) }
+            )
+            
+            Spacer(modifier = Modifier.height(24.dp))
             
             Text("Aviso Global", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text("Uma mensagem que aparecerá para todos os usuários (Opcional).", style = MaterialTheme.typography.bodySmall)
@@ -81,7 +105,11 @@ fun AdminSettingsScreen(onBack: () -> Unit) {
                 onClick = {
                     isLoading = true
                     val batch = db.batch()
-                    batch.set(db.collection("config").document("pricing"), mapOf("value" to price))
+                    batch.set(db.collection("config").document("pricing"), mapOf(
+                        "bronze" to priceBronze,
+                        "prata" to pricePrata,
+                        "ouro" to priceOuro
+                    ))
                     batch.set(db.collection("config").document("announcement"), mapOf("message" to alertMessage))
                     
                     batch.commit().addOnSuccessListener {

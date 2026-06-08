@@ -22,7 +22,8 @@ sealed class AuthState {
         val bindings: List<UserBinding>,
         val latestSalon: Salon?,
         val completedCount: Int,
-        val lastCompletedAppointment: Appointment?
+        val lastCompletedAppointment: Appointment?,
+        val loyaltyState: LoyaltyState = LoyaltyState()
     ) : AuthState()
 }
 
@@ -47,8 +48,14 @@ class MainViewModel(
     private val _pendingSalonAppointments = MutableStateFlow<List<Appointment>>(emptyList())
     val pendingSalonAppointments = _pendingSalonAppointments.asStateFlow()
 
-    private val _subscriptionPrice = MutableStateFlow("49,90")
-    val subscriptionPrice = _subscriptionPrice.asStateFlow()
+    private val _subscriptionPriceBronze = MutableStateFlow("110,00")
+    val subscriptionPriceBronze = _subscriptionPriceBronze.asStateFlow()
+
+    private val _subscriptionPricePrata = MutableStateFlow("150,00")
+    val subscriptionPricePrata = _subscriptionPricePrata.asStateFlow()
+
+    private val _subscriptionPriceOuro = MutableStateFlow("200,00")
+    val subscriptionPriceOuro = _subscriptionPriceOuro.asStateFlow()
 
     private val auth = FirebaseAuth.getInstance()
     private val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
@@ -144,13 +151,21 @@ class MainViewModel(
                 var latestSalon: Salon? = null
                 var completedCount = 0
                 var lastCompletedAppt: Appointment? = null
+                var loyaltyState = LoyaltyState()
                 
                 if (firstBinding != null) {
                     FirebaseMessaging.getInstance().subscribeToTopic("salon_${firstBinding.salonId}")
                     latestSalon = salonRepository.getSalonById(firstBinding.salonId)
                     val history = appointmentRepository.getClientHistory(userId)
-                    val salonHistory = history.filter { it.salonId == firstBinding.salonId && it.status == "CONFIRMED" }
-                    completedCount = salonHistory.size
+                    val salonHistory = history.filter { it.salonId == firstBinding.salonId && it.status == "CONFIRMED" && it.loyaltyValidated }
+                    
+                    if (latestSalon != null) {
+                        loyaltyState = latestSalon.calculateLoyaltyState(salonHistory)
+                        completedCount = loyaltyState.currentCardStampsCount
+                    } else {
+                        completedCount = salonHistory.filter { !it.loyaltyRedeemed }.size
+                    }
+
                     lastCompletedAppt = salonHistory
                         .filter {
                             val apptDate = it.date
@@ -177,7 +192,8 @@ class MainViewModel(
                     bindings = updatedBindings,
                     latestSalon = latestSalon,
                     completedCount = completedCount,
-                    lastCompletedAppointment = lastCompletedAppt
+                    lastCompletedAppointment = lastCompletedAppt,
+                    loyaltyState = loyaltyState
                 )
                 loadClientAppointments()
             }
@@ -220,10 +236,10 @@ class MainViewModel(
         _pendingSalonAppointments.value = emptyList()
     }
 
-    fun updateProfileName(newName: String) {
+    fun updateProfile(newName: String, newPhoneNumber: String) {
         val current = _userProfile.value ?: return
         viewModelScope.launch {
-            val updated = current.copy(name = newName)
+            val updated = current.copy(name = newName, phoneNumber = newPhoneNumber)
             if (profileRepository.saveProfile(updated).isSuccess) _userProfile.value = updated
         }
     }
@@ -279,13 +295,18 @@ class MainViewModel(
         segment: String,
         hasLoyalty: Boolean,
         loyaltyRequired: Int,
-        loyaltyReward: String
+        loyaltyReward: String,
+        autoValidateLoyalty: Boolean,
+        loyaltyRedemptionDays: Int,
+        slotInterval: Int,
+        isIndividualized: Boolean
     ) {
         val state = _authState.value as? AuthState.AuthenticatedWithSalon ?: return
         viewModelScope.launch {
             val result = salonRepository.updateSalonSettings(
                 name, opening, closing, breakStart, breakEnd, days, autoAccept, logoShape, segment,
-                hasLoyalty, loyaltyRequired, loyaltyReward
+                hasLoyalty, loyaltyRequired, loyaltyReward, autoValidateLoyalty, loyaltyRedemptionDays,
+                slotInterval, isIndividualized
             )
             if (result.isSuccess) {
                 val updatedSalon = state.salon.copy(
@@ -300,7 +321,11 @@ class MainViewModel(
                     segment = segment,
                     hasLoyaltyProgram = hasLoyalty,
                     loyaltyRequiredServices = loyaltyRequired,
-                    loyaltyRewardDescription = loyaltyReward
+                    loyaltyRewardDescription = loyaltyReward,
+                    autoValidateLoyalty = autoValidateLoyalty,
+                    loyaltyRedemptionDays = loyaltyRedemptionDays,
+                    slotIntervalMinutes = slotInterval,
+                    isConfigurationIndividualized = isIndividualized
                 )
                 _authState.value = state.copy(salon = updatedSalon)
             }
@@ -332,12 +357,66 @@ class MainViewModel(
         }
     }
 
+    data class SalonClientItem(
+        val profile: com.example.agendei_pro.core.model.UserProfile,
+        val unredeemedStamps: Int
+    )
+
+    private val _salonClients = MutableStateFlow<List<SalonClientItem>>(emptyList())
+    val salonClients: StateFlow<List<SalonClientItem>> = _salonClients
+
+    fun loadSalonClients() {
+        val state = _authState.value as? AuthState.AuthenticatedWithSalon ?: return
+        viewModelScope.launch {
+            try {
+                val profiles = salonRepository.getSalonClients(state.salon.id)
+                val items = profiles.map { profile ->
+                    val history = appointmentRepository.getClientHistory(profile.uid)
+                    val salonHistory = history.filter { it.salonId == state.salon.id }
+                    val loyaltyState = state.salon.calculateLoyaltyState(salonHistory)
+                    val activeStamps = loyaltyState.activeRewardsCount * state.salon.loyaltyRequiredServices + loyaltyState.currentCardStampsCount
+                    SalonClientItem(profile, activeStamps)
+                }
+                _salonClients.value = items
+            } catch (e: Exception) {
+                _salonClients.value = emptyList()
+            }
+        }
+    }
+
+    fun redeemLoyaltyRewardForClient(clientUid: String) {
+        val state = _authState.value as? AuthState.AuthenticatedWithSalon ?: return
+        val loyaltyRequired = state.salon.loyaltyRequiredServices
+        viewModelScope.launch {
+            appointmentRepository.redeemLoyaltyRewards(clientUid, state.salon.id, loyaltyRequired).onSuccess {
+                loadSalonClients()
+            }
+        }
+    }
+
     fun updateAppointmentStatus(id: String, status: String) {
-        viewModelScope.launch { appointmentRepository.updateAppointmentStatus(id, status) }
+        val state = _authState.value
+        val autoValidate = if (state is AuthState.AuthenticatedWithSalon) state.salon.autoValidateLoyalty else false
+        viewModelScope.launch { 
+            appointmentRepository.updateAppointmentStatus(id, status, validateLoyalty = (status == "CONFIRMED" && autoValidate)) 
+        }
+    }
+
+    fun updateLoyaltyValidation(id: String, validated: Boolean) {
+        viewModelScope.launch { appointmentRepository.updateLoyaltyValidation(id, validated) }
     }
 
     fun deleteAppointment(id: String) {
-        viewModelScope.launch { appointmentRepository.deleteAppointment(id) }
+        viewModelScope.launch {
+            appointmentRepository.deleteAppointment(id)
+        }
+    }
+
+    fun subscribeToPlan(planName: String, maxProfessionals: Int) {
+        val user = auth.currentUser ?: return
+        viewModelScope.launch {
+            salonRepository.updateSubscriptionPlan(user.uid, planName, maxProfessionals)
+        }
     }
 
     override fun onCleared() {
@@ -349,8 +428,12 @@ class MainViewModel(
 
     private fun fetchSubscriptionPrice() {
         db.collection("config").document("pricing").get().addOnSuccessListener { doc ->
-            val price = doc.getString("value")
-            if (price != null) _subscriptionPrice.value = price
+            val bronze = doc.getString("bronze")
+            val prata = doc.getString("prata")
+            val ouro = doc.getString("ouro")
+            if (bronze != null) _subscriptionPriceBronze.value = bronze
+            if (prata != null) _subscriptionPricePrata.value = prata
+            if (ouro != null) _subscriptionPriceOuro.value = ouro
         }
     }
 }
