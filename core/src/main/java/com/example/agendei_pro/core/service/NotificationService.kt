@@ -208,6 +208,19 @@ class NotificationService : Service() {
                         }
                     }
                 }
+            val notificationsReg = firestore.collection("notifications")
+                .whereEqualTo("recipientUid", userId)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null || snapshot == null) return@addSnapshotListener
+                    val documents = snapshot.documents
+                    for (doc in documents) {
+                        val title = doc.getString("title") ?: "Vaga Liberada!"
+                        val message = doc.getString("message") ?: ""
+                        showNotification(title, message)
+                        doc.reference.delete()
+                    }
+                }
+            activeRegistrations.add(notificationsReg)
             activeRegistrations.add(clientBindingsReg)
         }
 

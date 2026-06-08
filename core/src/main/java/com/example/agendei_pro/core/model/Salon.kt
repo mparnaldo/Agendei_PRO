@@ -39,7 +39,10 @@ data class Salon(
     val slotIntervalMinutes: Int = 30,
     @get:PropertyName("isConfigurationIndividualized")
     @field:PropertyName("isConfigurationIndividualized")
-    val isConfigurationIndividualized: Boolean = false
+    val isConfigurationIndividualized: Boolean = false,
+    @get:PropertyName("hasWaitingList")
+    @field:PropertyName("hasWaitingList")
+    val hasWaitingList: Boolean = false
 )
 
 data class LoyaltyState(

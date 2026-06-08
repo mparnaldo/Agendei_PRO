@@ -44,6 +44,7 @@ fun SalonSettingsScreen(
     currentLoyaltyRedemptionDays: Int,
     currentSlotInterval: Int,
     currentIsIndividualized: Boolean,
+    currentHasWaitingList: Boolean,
     uploadProgress: Int?,
     onSave: (
         name: String,
@@ -61,7 +62,8 @@ fun SalonSettingsScreen(
         autoValidateLoyalty: Boolean,
         loyaltyRedemptionDays: Int,
         slotInterval: Int,
-        isIndividualized: Boolean
+        isIndividualized: Boolean,
+        hasWaitingList: Boolean
     ) -> Unit,
     onLogoSelected: (Uri) -> Unit,
     onRemoveLogo: () -> Unit,
@@ -83,6 +85,7 @@ fun SalonSettingsScreen(
     var loyaltyRedemptionDays by remember { mutableStateOf(currentLoyaltyRedemptionDays.toString()) }
     var slotInterval by remember { mutableIntStateOf(currentSlotInterval) }
     var isIndividualized by remember { mutableStateOf(currentIsIndividualized) }
+    var hasWaitingList by remember { mutableStateOf(currentHasWaitingList) }
 
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { onLogoSelected(it) }
@@ -265,6 +268,21 @@ fun SalonSettingsScreen(
 
             Spacer(Modifier.height(16.dp))
             Card(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Fila de Espera Inteligente", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("Permitir que clientes entrem na fila de espera caso não encontrem horários disponíveis", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(checked = hasWaitingList, onCheckedChange = { hasWaitingList = it })
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -340,7 +358,8 @@ fun SalonSettingsScreen(
                         autoValidateLoyalty,
                         loyaltyRedemptionDays.toIntOrNull() ?: 30,
                         slotInterval,
-                        isIndividualized
+                        isIndividualized,
+                        hasWaitingList
                     ) 
                 }, 
                 modifier = Modifier.fillMaxWidth().padding(top = 32.dp).height(56.dp), 

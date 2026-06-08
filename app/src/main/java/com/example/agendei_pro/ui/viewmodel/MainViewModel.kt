@@ -299,14 +299,15 @@ class MainViewModel(
         autoValidateLoyalty: Boolean,
         loyaltyRedemptionDays: Int,
         slotInterval: Int,
-        isIndividualized: Boolean
+        isIndividualized: Boolean,
+        hasWaitingList: Boolean
     ) {
         val state = _authState.value as? AuthState.AuthenticatedWithSalon ?: return
         viewModelScope.launch {
             val result = salonRepository.updateSalonSettings(
                 name, opening, closing, breakStart, breakEnd, days, autoAccept, logoShape, segment,
                 hasLoyalty, loyaltyRequired, loyaltyReward, autoValidateLoyalty, loyaltyRedemptionDays,
-                slotInterval, isIndividualized
+                slotInterval, isIndividualized, hasWaitingList
             )
             if (result.isSuccess) {
                 val updatedSalon = state.salon.copy(
@@ -325,7 +326,8 @@ class MainViewModel(
                     autoValidateLoyalty = autoValidateLoyalty,
                     loyaltyRedemptionDays = loyaltyRedemptionDays,
                     slotIntervalMinutes = slotInterval,
-                    isConfigurationIndividualized = isIndividualized
+                    isConfigurationIndividualized = isIndividualized,
+                    hasWaitingList = hasWaitingList
                 )
                 _authState.value = state.copy(salon = updatedSalon)
             }

@@ -181,7 +181,8 @@ class SalonRepository {
         autoValidateLoyalty: Boolean,
         loyaltyRedemptionDays: Int,
         slotInterval: Int,
-        isIndividualized: Boolean
+        isIndividualized: Boolean,
+        hasWaitingList: Boolean
     ): Result<Unit> {
         val user = auth.currentUser ?: return Result.failure(Exception("Não logado"))
         return try {
@@ -201,7 +202,8 @@ class SalonRepository {
                 "autoValidateLoyalty" to autoValidateLoyalty,
                 "loyaltyRedemptionDays" to loyaltyRedemptionDays,
                 "slotIntervalMinutes" to slotInterval,
-                "isConfigurationIndividualized" to isIndividualized
+                "isConfigurationIndividualized" to isIndividualized,
+                "hasWaitingList" to hasWaitingList
             )).await()
             Result.success(Unit)
         } catch (e: Exception) {

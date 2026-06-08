@@ -317,36 +317,37 @@ class MainActivity : ComponentActivity() {
                                 composable("salon_performance") { SalonPerformanceScreen { navController.popBackStack() } }
                                 composable("salon_waiting_list") { SalonWaitingListScreen { navController.popBackStack() } }
                                 composable("salon_settings") {
-                                    val state = authState as? AuthState.AuthenticatedWithSalon
-                                    val uploadProgress by viewModel.uploadProgress.collectAsState()
-                                    SalonSettingsScreen(
-                                        currentName = state?.salon?.name ?: "",
-                                        currentOpening = state?.salon?.openingTime ?: "08:00",
-                                        currentClosing = state?.salon?.closingTime ?: "18:00",
-                                        currentBreakStart = state?.salon?.breakStart ?: "12:00",
-                                        currentBreakEnd = state?.salon?.breakEnd ?: "13:00",
-                                        currentDays = state?.salon?.workingDays ?: listOf(2,3,4,5,6,7),
-                                        currentAutoAccept = state?.salon?.autoAccept ?: false,
-                                        currentLogoUrl = state?.salon?.logoUrl,
-                                        currentLogoShape = state?.salon?.logoShape ?: "ROUND",
-                                        currentSegment = state?.salon?.segment ?: "BARBEARIA",
-                                        currentHasLoyalty = state?.salon?.hasLoyaltyProgram ?: false,
-                                        currentLoyaltyRequired = state?.salon?.loyaltyRequiredServices ?: 10,
-                                        currentLoyaltyReward = state?.salon?.loyaltyRewardDescription ?: "Corte Grátis",
-                                        currentAutoValidateLoyalty = state?.salon?.autoValidateLoyalty ?: false,
-                                        currentLoyaltyRedemptionDays = state?.salon?.loyaltyRedemptionDays ?: 30,
-                                        currentSlotInterval = state?.salon?.slotIntervalMinutes ?: 30,
-                                        currentIsIndividualized = state?.salon?.isConfigurationIndividualized ?: false,
-                                        uploadProgress = uploadProgress,
-                                        onSave = { name, o, c, bs, be, d, a, s, seg, hl, lr, lrd, avl, lrdays, slotInt, isIndiv -> 
-                                            viewModel.updateSalonSettings(name, o, c, bs, be, d, a, s, seg, hl, lr, lrd, avl, lrdays, slotInt, isIndiv)
-                                            navController.popBackStack()
-                                        },
-                                        onLogoSelected = { uri -> viewModel.uploadSalonLogo(uri) },
-                                        onRemoveLogo = { viewModel.uploadSalonLogo(android.net.Uri.EMPTY) },
-                                        onNavigateBack = { navController.popBackStack() }
-                                    )
-                                }
+                                     val state = authState as? AuthState.AuthenticatedWithSalon
+                                     val uploadProgress by viewModel.uploadProgress.collectAsState()
+                                     SalonSettingsScreen(
+                                         currentName = state?.salon?.name ?: "",
+                                         currentOpening = state?.salon?.openingTime ?: "08:00",
+                                         currentClosing = state?.salon?.closingTime ?: "18:00",
+                                         currentBreakStart = state?.salon?.breakStart ?: "12:00",
+                                         currentBreakEnd = state?.salon?.breakEnd ?: "13:00",
+                                         currentDays = state?.salon?.workingDays ?: listOf(2,3,4,5,6,7),
+                                         currentAutoAccept = state?.salon?.autoAccept ?: false,
+                                         currentLogoUrl = state?.salon?.logoUrl,
+                                         currentLogoShape = state?.salon?.logoShape ?: "ROUND",
+                                         currentSegment = state?.salon?.segment ?: "BARBEARIA",
+                                         currentHasLoyalty = state?.salon?.hasLoyaltyProgram ?: false,
+                                         currentLoyaltyRequired = state?.salon?.loyaltyRequiredServices ?: 10,
+                                         currentLoyaltyReward = state?.salon?.loyaltyRewardDescription ?: "Corte Grátis",
+                                         currentAutoValidateLoyalty = state?.salon?.autoValidateLoyalty ?: false,
+                                         currentLoyaltyRedemptionDays = state?.salon?.loyaltyRedemptionDays ?: 30,
+                                         currentSlotInterval = state?.salon?.slotIntervalMinutes ?: 30,
+                                         currentIsIndividualized = state?.salon?.isConfigurationIndividualized ?: false,
+                                         currentHasWaitingList = state?.salon?.hasWaitingList ?: false,
+                                         uploadProgress = uploadProgress,
+                                         onSave = { name, o, c, bs, be, d, a, s, seg, hl, lr, lrd, avl, lrdays, slotInt, isIndiv, hwl -> 
+                                             viewModel.updateSalonSettings(name, o, c, bs, be, d, a, s, seg, hl, lr, lrd, avl, lrdays, slotInt, isIndiv, hwl)
+                                             navController.popBackStack()
+                                         },
+                                         onLogoSelected = { uri -> viewModel.uploadSalonLogo(uri) },
+                                         onRemoveLogo = { viewModel.uploadSalonLogo(android.net.Uri.EMPTY) },
+                                         onNavigateBack = { navController.popBackStack() }
+                                     )
+                                 }
                                 composable("salon_clients") {
                                     val state = authState as? AuthState.AuthenticatedWithSalon
                                     val loyaltyRequired = state?.salon?.loyaltyRequiredServices ?: 10

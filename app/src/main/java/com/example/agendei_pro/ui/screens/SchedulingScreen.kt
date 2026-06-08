@@ -421,6 +421,7 @@ fun SchedulingScreen(
                         DateTimeSelection(
                             slots = availableSlots,
                             isLoyaltyEligible = isLoyaltyEligible,
+                            hasWaitingList = salonVal?.hasWaitingList == true,
                             onConfirm = { timeStr, isRedeem ->
                                 if (userProfile != null && userProfile.phoneNumber.isBlank()) {
                                     pendingTimeStr = timeStr
@@ -675,6 +676,7 @@ fun ServiceSelectionList(services: List<Service>, onServiceSelected: (Service) -
 fun DateTimeSelection(
     slots: List<TimeSlot>,
     isLoyaltyEligible: Boolean,
+    hasWaitingList: Boolean,
     onConfirm: (String, Boolean) -> Unit,
     onJoinWaitingList: () -> Unit
 ) {
@@ -754,18 +756,21 @@ fun DateTimeSelection(
             Text(if (useLoyaltyReward) "Agendar com Prêmio Fidelidade" else "Finalizar Agendamento")
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        val showWaitListButton = hasWaitingList && slots.isNotEmpty() && slots.none { it.isAvailable }
+        if (showWaitListButton) {
+            Spacer(modifier = Modifier.height(12.dp))
 
-        OutlinedButton(
-            onClick = onJoinWaitingList,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.secondary),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
-            shape = RoundedCornerShape(8.dp)
-        ) {
-            Icon(Icons.Default.EventNote, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Entrar na Fila de Espera", fontSize = 14.sp)
+            OutlinedButton(
+                onClick = onJoinWaitingList,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.secondary),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Icon(Icons.Default.EventNote, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Entrar na Fila de Espera", fontSize = 14.sp)
+            }
         }
     }
 }

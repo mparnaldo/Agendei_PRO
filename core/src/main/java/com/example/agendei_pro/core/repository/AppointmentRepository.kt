@@ -102,12 +102,76 @@ class AppointmentRepository {
         }
     }
 
+    suspend fun getAppointmentById(id: String): Appointment? = try {
+        val snapshot = firestore.collection("appointments").document(id).get().await()
+        snapshot.toObject(Appointment::class.java)
+    } catch (e: Exception) {
+        null
+    }
+
+    suspend fun notifyWaitlistForFreeSlot(appt: Appointment) {
+        val apptDate = appt.date ?: return
+        val startOfDay = Calendar.getInstance().apply {
+            time = apptDate
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.time
+        
+        val endOfDay = Calendar.getInstance().apply {
+            time = apptDate
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 59)
+            set(Calendar.SECOND, 59)
+            set(Calendar.MILLISECOND, 999)
+        }.time
+
+        try {
+            val snapshot = firestore.collection("waiting_list")
+                .whereEqualTo("salonId", appt.salonId)
+                .whereEqualTo("status", "WAITING")
+                .whereGreaterThanOrEqualTo("date", startOfDay)
+                .whereLessThanOrEqualTo("date", endOfDay)
+                .get().await()
+
+            val waitlist = snapshot.toObjects(com.example.agendei_pro.core.model.WaitingEntry::class.java)
+            if (waitlist.isEmpty()) return
+
+            val salonSnap = firestore.collection("salons").document(appt.salonId).get().await()
+            val salonName = salonSnap.getString("name") ?: "Salão"
+
+            val sdf = java.text.SimpleDateFormat("dd/MM", java.util.Locale.US)
+            val dateStr = sdf.format(apptDate)
+
+            for (entry in waitlist) {
+                if (entry.professionalId != "ANY" && entry.professionalId != appt.professionalId) {
+                    continue
+                }
+
+                val notificationDoc = firestore.collection("notifications").document()
+                val notificationData = mapOf(
+                    "id" to notificationDoc.id,
+                    "recipientUid" to entry.clientUid,
+                    "title" to "Vaga Liberada! 📅",
+                    "message" to "Um horário foi liberado no $salonName para o dia $dateStr. Abra o aplicativo para agendar!",
+                    "createdAt" to Date()
+                )
+                notificationDoc.set(notificationData).await()
+            }
+        } catch (e: Exception) {}
+    }
+
     suspend fun updateAppointmentStatus(id: String, status: String, validateLoyalty: Boolean = false): Result<Unit> = try {
+        val appt = getAppointmentById(id)
         val updates = mutableMapOf<String, Any>("status" to status)
         if (validateLoyalty) {
             updates["loyaltyValidated"] = true
         }
         firestore.collection("appointments").document(id).update(updates).await()
+        if (status == "CANCELLED" && appt != null && appt.status != "CANCELLED") {
+            notifyWaitlistForFreeSlot(appt)
+        }
         Result.success(Unit)
     } catch (e: Exception) { Result.failure(e) }
 
@@ -117,7 +181,11 @@ class AppointmentRepository {
     } catch (e: Exception) { Result.failure(e) }
 
     suspend fun deleteAppointment(id: String): Result<Unit> = try {
+        val appt = getAppointmentById(id)
         firestore.collection("appointments").document(id).delete().await()
+        if (appt != null && appt.status != "CANCELLED") {
+            notifyWaitlistForFreeSlot(appt)
+        }
         Result.success(Unit)
     } catch (e: Exception) { Result.failure(e) }
 

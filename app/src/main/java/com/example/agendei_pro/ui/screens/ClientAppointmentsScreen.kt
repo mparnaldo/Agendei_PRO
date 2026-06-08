@@ -3,6 +3,8 @@ package com.example.agendei_pro.ui.screens
 import android.content.Intent
 import android.provider.CalendarContract
 import android.widget.Toast
+import kotlinx.coroutines.launch
+import com.example.agendei_pro.core.repository.AppointmentRepository
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -36,6 +38,7 @@ import java.util.*
 @Composable
 fun ClientAppointmentsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val db = FirebaseFirestore.getInstance()
     val auth = FirebaseAuth.getInstance()
     val userUid = auth.currentUser?.uid
@@ -230,14 +233,14 @@ fun ClientAppointmentsScreen(onBack: () -> Unit) {
                                             // Cancelar Agendamento
                                             OutlinedButton(
                                                 onClick = {
-                                                    db.collection("appointments").document(appt.id)
-                                                        .update("status", "CANCELLED")
-                                                        .addOnSuccessListener {
+                                                    scope.launch {
+                                                        val result = AppointmentRepository().updateAppointmentStatus(appt.id, "CANCELLED")
+                                                        if (result.isSuccess) {
                                                             Toast.makeText(context, "Agendamento Cancelado!", Toast.LENGTH_SHORT).show()
+                                                        } else {
+                                                            Toast.makeText(context, "Erro ao cancelar agendamento", Toast.LENGTH_SHORT).show()
                                                         }
-                                                        .addOnFailureListener { e ->
-                                                            Toast.makeText(context, "Erro: ${e.message}", Toast.LENGTH_SHORT).show()
-                                                        }
+                                                    }
                                                 },
                                                 modifier = Modifier.weight(1f),
                                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
