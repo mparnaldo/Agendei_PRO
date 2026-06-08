@@ -186,7 +186,9 @@ class AppointmentRepository {
             val message = if (user != null && user.uid == appt.clientUid) {
                 "O cliente ${appt.clientName} cancelou o horário de $dateStr (${appt.serviceName})."
             } else {
-                "${appt.salonName} cancelou seu horário de $dateStr para ${appt.serviceName}."
+                val salonSnap = firestore.collection("salons").document(appt.salonId).get().await()
+                val salonName = salonSnap.getString("name") ?: "O salão"
+                "$salonName cancelou seu horário de $dateStr para ${appt.serviceName}."
             }
 
             val notificationDoc = firestore.collection("notifications").document()

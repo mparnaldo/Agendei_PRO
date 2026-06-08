@@ -29,6 +29,10 @@ import com.example.agendei_pro.core.model.Appointment
 import java.text.SimpleDateFormat
 import java.util.Date
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.background
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
