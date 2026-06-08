@@ -80,34 +80,41 @@ class MainViewModel(
                 _authState.value = AuthState.Unauthenticated
             } else {
                 fetchSubscriptionPrice()
-                _userProfile.value = profileRepository.getProfile()
-                
-                FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-                    if (task.isSuccessful) {
-                        viewModelScope.launch {
-                            profileRepository.updateFcmToken(task.result)
+                val profile = profileRepository.getProfile()
+                if (profile == null) {
+                    auth.signOut()
+                    _userProfile.value = null
+                    _authState.value = AuthState.Unauthenticated
+                } else {
+                    _userProfile.value = profile
+                    
+                    FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+                        if (task.isSuccessful) {
+                            viewModelScope.launch {
+                                profileRepository.updateFcmToken(task.result)
+                            }
                         }
                     }
-                }
 
-                announcementListener?.remove()
-                val configDocName = if (isProVersion) "announcement_salons" else "announcement_clients"
-                announcementListener = db.collection("config").document(configDocName).addSnapshotListener { snapshot, error ->
-                    if (error == null && snapshot != null) {
-                        _globalAnnouncement.value = snapshot.toObject(Announcement::class.java)
-                    } else {
-                        _globalAnnouncement.value = null
+                    announcementListener?.remove()
+                    val configDocName = if (isProVersion) "announcement_salons" else "announcement_clients"
+                    announcementListener = db.collection("config").document(configDocName).addSnapshotListener { snapshot, error ->
+                        if (error == null && snapshot != null) {
+                            _globalAnnouncement.value = snapshot.toObject(Announcement::class.java)
+                        } else {
+                            _globalAnnouncement.value = null
+                        }
                     }
-                }
 
-                if (isProVersion) {
-                    FirebaseMessaging.getInstance().subscribeToTopic("salons")
-                    FirebaseMessaging.getInstance().unsubscribeFromTopic("clients")
-                    observeSalonStatus(user.uid)
-                } else {
-                    FirebaseMessaging.getInstance().subscribeToTopic("clients")
-                    FirebaseMessaging.getInstance().unsubscribeFromTopic("salons")
-                    loadClientStatus(user.uid)
+                    if (isProVersion) {
+                        FirebaseMessaging.getInstance().subscribeToTopic("salons")
+                        FirebaseMessaging.getInstance().unsubscribeFromTopic("clients")
+                        observeSalonStatus(user.uid)
+                    } else {
+                        FirebaseMessaging.getInstance().subscribeToTopic("clients")
+                        FirebaseMessaging.getInstance().unsubscribeFromTopic("salons")
+                        loadClientStatus(user.uid)
+                    }
                 }
             }
         }

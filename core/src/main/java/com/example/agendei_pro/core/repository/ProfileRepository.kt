@@ -26,19 +26,23 @@ class ProfileRepository {
                     }
                 } else null
             } else {
-                // Se não existe, cria um novo com os dados do Google
-                val newProfile = UserProfile(
-                    uid = user.uid,
-                    name = user.displayName ?: "Usuário",
-                    email = user.email ?: "",
-                    photoUrl = user.photoUrl?.toString() ?: ""
-                )
-                saveProfile(newProfile)
-                newProfile
+                null
             }
         } catch (e: Exception) {
             null
         }
+    }
+
+    suspend fun createProfileForCurrentUser(): UserProfile? {
+        val user = auth.currentUser ?: return null
+        val profile = UserProfile(
+            uid = user.uid,
+            name = user.displayName ?: "Usuário",
+            email = user.email ?: "",
+            photoUrl = user.photoUrl?.toString() ?: ""
+        )
+        saveProfile(profile)
+        return profile
     }
 
     suspend fun saveProfile(profile: UserProfile): Result<Unit> {

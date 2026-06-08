@@ -36,6 +36,10 @@ class AuthManager(private val context: Context) {
             if (googleIdTokenCredential != null) {
                 val firebaseCredential = GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
                 auth.signInWithCredential(firebaseCredential).await()
+                
+                // Criar o perfil no Firestore imediatamente após o login do Google
+                com.example.agendei_pro.core.repository.ProfileRepository().createProfileForCurrentUser()
+                
                 Result.success(Unit)
             } else {
                 Result.failure(Exception("Falha ao processar token do Google"))
