@@ -174,7 +174,8 @@ class MainViewModel(
                         completedCount = salonHistory.filter { !it.loyaltyRedeemed }.size
                     }
 
-                    lastCompletedAppt = salonHistory
+                    lastCompletedAppt = history
+                        .filter { it.salonId == firstBinding.salonId && (it.status == "SERVED" || it.status == "CONFIRMED") }
                         .filter {
                             val apptDate = it.date
                             apptDate != null && apptDate.before(java.util.Date())

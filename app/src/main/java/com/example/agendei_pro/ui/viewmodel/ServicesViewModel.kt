@@ -75,4 +75,36 @@ class ServicesViewModel(
             repository.deleteService(serviceId)
         }
     }
+
+    fun updateService(
+        serviceId: String,
+        name: String,
+        price: Double,
+        duration: Int,
+        category: String,
+        observation: String,
+        imageUrl: String,
+        localImageUri: android.net.Uri? = null
+    ) {
+        viewModelScope.launch {
+            var finalImageUrl = imageUrl
+            if (localImageUri != null && localImageUri != android.net.Uri.EMPTY) {
+                _isUploadingImage.value = true
+                repository.uploadServiceImage(localImageUri).onSuccess {
+                    finalImageUrl = it
+                }.onFailure {}
+                _isUploadingImage.value = false
+            }
+            val updatedService = Service(
+                id = serviceId,
+                name = name,
+                price = price,
+                durationMinutes = duration,
+                category = category,
+                observation = observation,
+                imageUrl = finalImageUrl
+            )
+            repository.updateService(updatedService)
+        }
+    }
 }

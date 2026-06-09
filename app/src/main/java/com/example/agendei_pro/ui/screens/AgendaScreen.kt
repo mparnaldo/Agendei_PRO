@@ -587,7 +587,7 @@ fun AgendaListView(
     onBlockSlot: (String, String) -> Unit
 ) {
     val sdf = SimpleDateFormat("EEEE, dd 'de' MMMM", Locale("pt", "BR"))
-    var showFullTimeline by remember { mutableStateOf(false) }
+    var showFullTimeline by remember { mutableStateOf(true) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -743,17 +743,29 @@ fun AgendaListView(
                                 } else {
                                     Card(
                                         modifier = Modifier.fillMaxWidth(),
-                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f))
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (item.appointment.status == "BLOCKED") 
+                                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+                                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+                                        )
                                     ) {
                                         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            Text(item.time, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.outline)
+                                            Text(
+                                                item.time, 
+                                                fontWeight = FontWeight.Bold, 
+                                                color = if (item.appointment.status == "BLOCKED") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline
+                                            )
                                             Spacer(modifier = Modifier.width(16.dp))
                                             val occupancyText = if (item.appointment.status == "BLOCKED") {
                                                 "🔒 Ocupado (Ausência/Bloqueio)"
                                             } else {
                                                 "⏳ Em andamento: ${item.appointment.serviceName} (${item.appointment.clientName})"
                                             }
-                                            Text(occupancyText, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodyMedium)
+                                            Text(
+                                                occupancyText, 
+                                                color = if (item.appointment.status == "BLOCKED") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline, 
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
                                         }
                                     }
                                 }
@@ -920,7 +932,7 @@ fun AppointmentItem(
             .then(if (isCancelled) Modifier.alpha(0.5f) else Modifier),
         colors = CardDefaults.cardColors(
             containerColor = if (isBlocked) {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
             } else if (isPending) {
                 MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)
             } else if (isCancelled) {
@@ -942,7 +954,7 @@ fun AppointmentItem(
                 fontWeight = FontWeight.ExtraBold,
                 style = MaterialTheme.typography.titleLarge,
                 color = if (isBlocked) {
-                    MaterialTheme.colorScheme.outline
+                    MaterialTheme.colorScheme.error
                 } else if (isPending) {
                     MaterialTheme.colorScheme.error
                 } else if (isCancelled) {
@@ -958,12 +970,12 @@ fun AppointmentItem(
                 if (isBlocked) {
                     Text(
                         text = "🔒 Horário Bloqueado",
-                        color = MaterialTheme.colorScheme.outline,
+                        color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(bottom = 2.dp)
                     )
-                    Text(appt.clientName, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.outline)
+                    Text(appt.clientName, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.error)
                 } else {
                     if (isPending) {
                         Text(

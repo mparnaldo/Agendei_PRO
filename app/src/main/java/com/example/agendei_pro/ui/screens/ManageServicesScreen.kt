@@ -306,6 +306,7 @@ fun ManageServicesScreen(
     val segment by viewModel.salonSegment.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     var selectedSuggestion by remember { mutableStateOf<SuggestedService?>(null) }
+    var serviceToEdit by remember { mutableStateOf<Service?>(null) }
 
     val suggestions = remember(segment) {
         getSuggestionsForSegment(segment)
@@ -321,6 +322,7 @@ fun ManageServicesScreen(
         floatingActionButton = { 
             FloatingActionButton(onClick = { 
                 selectedSuggestion = null
+                serviceToEdit = null
                 showAddDialog = true 
             }) { 
                 Icon(Icons.Default.Add, null) 
@@ -352,6 +354,7 @@ fun ManageServicesScreen(
                     AssistChip(
                         onClick = { 
                             selectedSuggestion = s
+                            serviceToEdit = null
                             showAddDialog = true
                         }, 
                         label = { Text(text = s.name) }
@@ -370,7 +373,21 @@ fun ManageServicesScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(services) { service ->
-                        ServiceItem(service, onDelete = { viewModel.deleteService(service.id) })
+                        ServiceItem(
+                            service = service, 
+                            onDelete = { viewModel.deleteService(service.id) },
+                            onEdit = {
+                                serviceToEdit = service
+                                selectedSuggestion = SuggestedService(
+                                    name = service.name,
+                                    category = service.category,
+                                    defaultPrice = service.price,
+                                    defaultDuration = service.durationMinutes,
+                                    imageUrl = service.imageUrl
+                                )
+                                showAddDialog = true
+                            }
+                        )
                     }
                 }
             }
@@ -392,12 +409,17 @@ fun ManageServicesScreen(
             AddServiceDialog(
                 segment = segment,
                 prefilledService = selectedSuggestion,
+                prefilledObservation = serviceToEdit?.observation ?: "",
                 isUploading = isUploading,
                 onDismiss = { if (!isUploading) showAddDialog = false },
                 onConfirm = { n, p, d, c, o, img, localUri -> 
-                    viewModel.addService(n, p, d, c, o, img, localUri)
+                    if (serviceToEdit != null) {
+                        viewModel.updateService(serviceToEdit!!.id, n, p, d, c, o, img, localUri)
+                        serviceToEdit = null
+                    } else {
+                        viewModel.addService(n, p, d, c, o, img, localUri)
+                    }
                     if (localUri == null || localUri == android.net.Uri.EMPTY) {
-                        // If no local upload is needed, close immediately
                         showAddDialog = false
                     }
                 }
@@ -407,7 +429,7 @@ fun ManageServicesScreen(
 }
 
 @Composable
-fun ServiceItem(service: Service, onDelete: () -> Unit) {
+fun ServiceItem(service: Service, onDelete: () -> Unit, onEdit: () -> Unit) {
     val currency = NumberFormat.getCurrencyInstance(Locale("pt", "BR"))
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -442,8 +464,13 @@ fun ServiceItem(service: Service, onDelete: () -> Unit) {
             
             Column(horizontalAlignment = Alignment.End) {
                 Text(currency.format(service.price), fontWeight = FontWeight.ExtraBold)
-                IconButton(onClick = onDelete) { 
-                    Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) 
+                Row {
+                    IconButton(onClick = onEdit) { 
+                        Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.primary) 
+                    }
+                    IconButton(onClick = onDelete) { 
+                        Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) 
+                    }
                 }
             }
         }
@@ -455,6 +482,7 @@ fun ServiceItem(service: Service, onDelete: () -> Unit) {
 fun AddServiceDialog(
     segment: String,
     prefilledService: SuggestedService?,
+    prefilledObservation: String = "",
     isUploading: Boolean = false,
     onDismiss: () -> Unit,
     onConfirm: (String, Double, Int, String, String, String, Uri?) -> Unit
@@ -463,7 +491,7 @@ fun AddServiceDialog(
     var price by remember(prefilledService) { mutableStateOf(prefilledService?.defaultPrice?.toString() ?: "") }
     var duration by remember(prefilledService) { mutableStateOf(prefilledService?.defaultDuration?.toString() ?: "30") }
     var category by remember(prefilledService) { mutableStateOf(prefilledService?.category ?: "") }
-    var observation by remember { mutableStateOf("") }
+    var observation by remember(prefilledObservation) { mutableStateOf(prefilledObservation) }
     var imageUrl by remember(prefilledService) { mutableStateOf(prefilledService?.imageUrl ?: "") }
 
     var localImageUri by remember { mutableStateOf<Uri?>(null) }

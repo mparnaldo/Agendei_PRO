@@ -78,4 +78,19 @@ class ServiceRepository {
             Result.failure(e)
         }
     }
+
+    suspend fun updateService(service: Service): Result<Unit> {
+        val id = salonId ?: return Result.failure(Exception("Não autorizado"))
+        return try {
+            firestore.collection("salons")
+                .document(id)
+                .collection("services")
+                .document(service.id)
+                .set(service)
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

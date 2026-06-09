@@ -100,6 +100,32 @@ fun SalonClientsScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Voltar")
                     }
+                },
+                actions = {
+                    val authState = viewModel.authState.collectAsState().value
+                    if (authState is AuthState.AuthenticatedWithSalon) {
+                        val salon = authState.salon
+                        IconButton(onClick = {
+                            val text = "Olá! Já estamos usando o Agendei PRO para nossos agendamentos.\n\nBaixe o app do cliente aqui:\nhttps://drive.google.com/file/d/SEU_LINK_AQUI/view?usp=sharing\n\nNosso código de vinculação é: *${salon.code}*\n\nTe esperamos lá!"
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                setPackage("com.whatsapp")
+                                putExtra(Intent.EXTRA_TEXT, text)
+                            }
+                            try {
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                // Fallback se não tiver WhatsApp
+                                val fallbackIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TEXT, text)
+                                }
+                                context.startActivity(Intent.createChooser(fallbackIntent, "Compartilhar via"))
+                            }
+                        }) {
+                            Icon(Icons.Default.Share, contentDescription = "Compartilhar App", tint = MaterialTheme.colorScheme.primary)
+                        }
+                    }
                 }
             )
         }

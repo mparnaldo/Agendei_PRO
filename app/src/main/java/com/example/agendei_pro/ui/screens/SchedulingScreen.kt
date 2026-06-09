@@ -333,17 +333,19 @@ fun SchedulingScreen(
 
                                             val salonVal = viewModel.salon.collectAsState().value
                                             val currencyFormatter = remember { NumberFormat.getCurrencyInstance(Locale("pt", "BR")) }
-                                            if (salonVal?.isConfigurationIndividualized == true && selectedServiceVal != null) {
-                                                val customPrice = pro.servicePrices[selectedServiceVal.id]
-                                                if (customPrice != null) {
-                                                    Text(
-                                                        text = currencyFormatter.format(customPrice),
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = MaterialTheme.colorScheme.primary,
-                                                        fontSize = 15.sp,
-                                                        modifier = Modifier.padding(start = 8.dp)
-                                                    )
+                                            if (selectedServiceVal != null) {
+                                                val finalPrice = if (salonVal?.isConfigurationIndividualized == true) {
+                                                    pro.servicePrices[selectedServiceVal.id] ?: selectedServiceVal.price
+                                                } else {
+                                                    selectedServiceVal.price
                                                 }
+                                                Text(
+                                                    text = currencyFormatter.format(finalPrice),
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    fontSize = 15.sp,
+                                                    modifier = Modifier.padding(start = 8.dp)
+                                                )
                                             }
                                         }
                                     }

@@ -187,6 +187,7 @@ class SchedulingViewModel(
 
         val slotStartMs = slotStartCal.timeInMillis
         val interval = if (salon.slotIntervalMinutes > 0) salon.slotIntervalMinutes else 30
+        val slotEndMs = slotStartMs + interval * 60 * 1000
         
         val isBlocked = activeBookings.any { appt ->
             val apptDate = appt.date ?: return@any false
@@ -196,10 +197,10 @@ class SchedulingViewModel(
             }
             val apptEndMs = apptStartMs + durationMin * 60 * 1000
             
-            val matchesTime = slotStartMs >= apptStartMs && slotStartMs < apptEndMs
+            val overlap = Math.max(slotStartMs, apptStartMs) < Math.min(slotEndMs, apptEndMs)
             val isForThisPro = appt.professionalId == pro.id
             val isSalonWide = appt.professionalId == "ALL"
-            matchesTime && (isForThisPro || isSalonWide)
+            overlap && (isForThisPro || isSalonWide)
         }
         return !isBlocked
     }
@@ -285,6 +286,7 @@ class SchedulingViewModel(
                             val isRetroOrDelay = isPast || (isToday && checkMin < (Calendar.getInstance().get(Calendar.HOUR_OF_DAY) * 60 + Calendar.getInstance().get(Calendar.MINUTE) + salon.minBookingDelayHours * 60))
 
                             val checkSlotStartMs = slotCal.timeInMillis
+                            val checkSlotEndMs = checkSlotStartMs + interval * 60 * 1000
                             val isBlocked = activeBookings.any { appt ->
                                 val apptDate = appt.date ?: return@any false
                                 val apptStartMs = apptDate.time
@@ -292,7 +294,7 @@ class SchedulingViewModel(
                                     _services.value.find { it.id == appt.serviceId }?.durationMinutes ?: 30
                                 }
                                 val apptEndMs = apptStartMs + durationMin * 60 * 1000
-                                checkSlotStartMs >= apptStartMs && checkSlotStartMs < apptEndMs
+                                Math.max(checkSlotStartMs, apptStartMs) < Math.min(checkSlotEndMs, apptEndMs)
                             }
 
                             val endMin = timeToMinutes(salon.closingTime) ?: (18 * 60)
