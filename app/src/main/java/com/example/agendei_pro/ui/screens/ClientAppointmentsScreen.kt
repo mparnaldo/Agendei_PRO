@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.EventNote
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -50,6 +51,13 @@ fun ClientAppointmentsScreen(onBack: () -> Unit) {
     
     var showCancellationBlockDialog by remember { mutableStateOf(false) }
     var cancellationBlockMessage by remember { mutableStateOf("") }
+    
+    var evaluatedAppointmentIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var showEvaluationDialog by remember { mutableStateOf(false) }
+    var selectedApptForEvaluation by remember { mutableStateOf<Appointment?>(null) }
+    var evaluationRating by remember { mutableIntStateOf(5) }
+    var evaluationComment by remember { mutableStateOf("") }
+    var isFavoriteChecked by remember { mutableStateOf(false) }
 
     LaunchedEffect(userUid) {
         if (userUid != null) {
@@ -62,6 +70,14 @@ fun ClientAppointmentsScreen(onBack: () -> Unit) {
                     }
                     appointments = snapshot?.toObjects(Appointment::class.java) ?: emptyList()
                     isLoading = false
+                }
+            
+            db.collection("reviews")
+                .whereEqualTo("userId", userUid)
+                .addSnapshotListener { reviewSnapshot, _ ->
+                    if (reviewSnapshot != null) {
+                        evaluatedAppointmentIds = reviewSnapshot.documents.mapNotNull { it.getString("appointmentId") }.toSet()
+                    }
                 }
         } else {
             isLoading = false
@@ -284,6 +300,26 @@ fun ClientAppointmentsScreen(onBack: () -> Unit) {
                                             }
                                         }
                                     }
+
+                                    // Botões de Ação para Agendamentos Passados (Avaliar)
+                                    if (selectedTab == 1 && appt.status == "CONFIRMED" && appt.id !in evaluatedAppointmentIds && appt.professionalId.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Button(
+                                            onClick = {
+                                                selectedApptForEvaluation = appt
+                                                evaluationRating = 5
+                                                evaluationComment = ""
+                                                showEvaluationDialog = true
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer)
+                                        ) {
+                                            Icon(Icons.Default.Star, null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Avaliar Profissional", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -291,6 +327,130 @@ fun ClientAppointmentsScreen(onBack: () -> Unit) {
                 }
             }
         }
+    }
+
+    if (showEvaluationDialog && selectedApptForEvaluation != null) {
+        AlertDialog(
+            onDismissRequest = { showEvaluationDialog = false },
+            title = { Text("Avaliar Atendimento ⭐", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Como foi seu atendimento com ${selectedApptForEvaluation?.professionalName}?",
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                    
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    ) {
+                        for (i in 1..5) {
+                            IconButton(
+                                onClick = { evaluationRating = i },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Star,
+                                    contentDescription = "$i Estrelas",
+                                    tint = if (i <= evaluationRating) Color(0xFFFFB300) else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+                        }
+                    }
+                    
+                    OutlinedTextField(
+                        value = evaluationComment,
+                        onValueChange = { evaluationComment = it },
+                        label = { Text("Escreva um comentário (opcional)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 3
+                    )
+                    
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+                    ) {
+                        Checkbox(
+                            checked = isFavoriteChecked,
+                            onCheckedChange = { isFavoriteChecked = it }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Tornar este colaborador meu favorito",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val appt = selectedApptForEvaluation ?: return@Button
+                        val reviewId = db.collection("reviews").document().id
+                        val newReview = mapOf(
+                            "id" to reviewId,
+                            "appointmentId" to appt.id,
+                            "salonId" to appt.salonId,
+                            "professionalId" to appt.professionalId,
+                            "userId" to (userUid ?: ""),
+                            "userName" to (auth.currentUser?.displayName ?: "Cliente Agendei"),
+                            "rating" to evaluationRating,
+                            "comment" to evaluationComment,
+                            "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                        )
+                        
+                        db.collection("reviews").document(reviewId).set(newReview)
+                            .addOnSuccessListener {
+                                if (isFavoriteChecked) {
+                                    db.collection("salons").document(appt.salonId)
+                                        .collection("professionals").document(appt.professionalId)
+                                        .get()
+                                        .addOnSuccessListener { proSnap ->
+                                            val proPhotoUrl = proSnap.getString("photoUrl")
+                                            val proName = proSnap.getString("name") ?: appt.professionalName
+                                            
+                                            db.collection("user_bindings")
+                                                .whereEqualTo("userId", userUid ?: "")
+                                                .whereEqualTo("salonId", appt.salonId)
+                                                .get()
+                                                .addOnSuccessListener { bindingSnap ->
+                                                    val bindingDoc = bindingSnap.documents.firstOrNull()
+                                                    if (bindingDoc != null) {
+                                                        bindingDoc.reference.update(mapOf(
+                                                            "favoriteProfessionalId" to appt.professionalId,
+                                                            "favoriteProfessionalName" to proName,
+                                                            "favoriteProfessionalPhotoUrl" to proPhotoUrl
+                                                        ))
+                                                    }
+                                                }
+                                        }
+                                }
+                                Toast.makeText(context, "Avaliação enviada com sucesso!", Toast.LENGTH_SHORT).show()
+                                showEvaluationDialog = false
+                                evaluationComment = ""
+                                evaluationRating = 5
+                                isFavoriteChecked = false
+                            }
+                            .addOnFailureListener {
+                                Toast.makeText(context, "Erro ao enviar avaliação.", Toast.LENGTH_SHORT).show()
+                            }
+                    }
+                ) {
+                    Text("Enviar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEvaluationDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 
     if (showCancellationBlockDialog) {

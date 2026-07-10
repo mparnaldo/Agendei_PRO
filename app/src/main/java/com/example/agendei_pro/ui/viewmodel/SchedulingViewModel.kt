@@ -35,6 +35,9 @@ class SchedulingViewModel(
     private val _isLoadingProfs = MutableStateFlow(true)
     val isLoadingProfs: StateFlow<Boolean> = _isLoadingProfs.asStateFlow()
 
+    private val _professionalRatings = MutableStateFlow<Map<String, Pair<Double, Int>>>(emptyMap())
+    val professionalRatings: StateFlow<Map<String, Pair<Double, Int>>> = _professionalRatings.asStateFlow()
+
     private val _selectedProfessional = MutableStateFlow<Professional?>(null)
     val selectedProfessional = _selectedProfessional.asStateFlow()
 
@@ -64,6 +67,26 @@ class SchedulingViewModel(
         viewModelScope.launch {
             _isLoadingProfs.value = true
             _professionals.value = salonRepository.getProfessionals(salonId)
+            
+            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            db.collection("reviews")
+                .whereEqualTo("salonId", salonId)
+                .get()
+                .addOnSuccessListener { snapshot ->
+                    val docs = snapshot?.documents ?: emptyList()
+                    val ratingsMap = mutableMapOf<String, MutableList<Int>>()
+                    for (doc in docs) {
+                        val proId = doc.getString("professionalId") ?: continue
+                        val rating = doc.getLong("rating")?.toInt() ?: continue
+                        ratingsMap.getOrPut(proId) { mutableListOf() }.add(rating)
+                    }
+                    val finalRatings = ratingsMap.mapValues { (_, ratings) ->
+                        val avg = ratings.average()
+                        Pair(avg, ratings.size)
+                    }
+                    _professionalRatings.value = finalRatings
+                }
+                
             _isLoadingProfs.value = false
         }
     }

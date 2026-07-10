@@ -26,6 +26,10 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.example.agendei_pro.core.model.Appointment
 import com.example.agendei_pro.core.model.Announcement
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import android.net.Uri
+import androidx.compose.foundation.BorderStroke
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -50,6 +54,36 @@ fun DashboardScreen(
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+    
+    var tomorrowAppointments by remember { mutableStateOf<List<Appointment>>(emptyList()) }
+    
+    LaunchedEffect(salonCode) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid
+        if (uid != null) {
+            val db = FirebaseFirestore.getInstance()
+            val cal = Calendar.getInstance().apply {
+                add(Calendar.DAY_OF_YEAR, 1)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            val startTomorrow = cal.time
+            cal.set(Calendar.HOUR_OF_DAY, 23)
+            cal.set(Calendar.MINUTE, 59)
+            cal.set(Calendar.SECOND, 59)
+            val endTomorrow = cal.time
+            
+            db.collection("appointments")
+                .whereEqualTo("salonId", uid)
+                .whereEqualTo("status", "CONFIRMED")
+                .whereGreaterThanOrEqualTo("date", startTomorrow)
+                .whereLessThanOrEqualTo("date", endTomorrow)
+                .addSnapshotListener { snapshot, _ ->
+                    tomorrowAppointments = snapshot?.toObjects(Appointment::class.java) ?: emptyList()
+                }
+        }
+    }
 
     val prefs = remember(context) { context.getSharedPreferences("announcements_prefs", Context.MODE_PRIVATE) }
     
@@ -242,6 +276,104 @@ fun DashboardScreen(
                     ActionButton(title = "Agenda", icon = Icons.Default.Event, modifier = Modifier.weight(1f), onClick = onViewAgenda)
                     ActionButton(title = "Serviços", icon = Icons.Default.ContentCut, modifier = Modifier.weight(1f), onClick = onManageServices)
                     ActionButton(title = "Relatórios", icon = Icons.Default.TrendingUp, modifier = Modifier.weight(1f), onClick = onFinancialClick)
+                }
+            }
+
+            // Card de Lembretes do Dia Seguinte via WhatsApp
+            if (tomorrowAppointments.isNotEmpty()) {
+                item {
+                    var showRemindersDialog by remember { mutableStateOf(false) }
+                    
+                    Card(
+                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF25D366)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Chat, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Lembrete de Amanhã 📱", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                Text("${tomorrowAppointments.size} agendamentos confirmados.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                            }
+                            Button(
+                                onClick = { showRemindersDialog = true },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366), contentColor = Color.White),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text("Enviar Lembretes", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                    
+                    if (showRemindersDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showRemindersDialog = false },
+                            title = { Text("Enviar Lembrete via WhatsApp") },
+                            text = {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("Selecione um cliente para disparar o lembrete via WhatsApp oficial:", style = MaterialTheme.typography.bodyMedium)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    LazyColumn(modifier = Modifier.heightIn(max = 280.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        items(tomorrowAppointments.sortedBy { it.date }) { appt ->
+                                            val timeStr = SimpleDateFormat("HH:mm", Locale.getDefault()).format(appt.date ?: Date())
+                                            Card(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(12.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(appt.clientName, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                                        Text("$timeStr - ${appt.serviceName}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                                                    }
+                                                    if (appt.clientPhone.isNotBlank()) {
+                                                        IconButton(
+                                                            onClick = {
+                                                                try {
+                                                                    val cleanPhone = appt.clientPhone.replace(Regex("[^0-9]"), "")
+                                                                    val text = "Olá ${appt.clientName}! Passando para lembrar do seu agendamento de *${appt.serviceName}* amanhã às *$timeStr*. Confirmado?"
+                                                                    val urlEncoded = java.net.URLEncoder.encode(text, "UTF-8")
+                                                                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                                                                        data = Uri.parse("https://api.whatsapp.com/send?phone=$cleanPhone&text=$urlEncoded")
+                                                                    }
+                                                                    context.startActivity(intent)
+                                                                } catch (e: Exception) {}
+                                                            },
+                                                            modifier = Modifier
+                                                                .size(36.dp)
+                                                                .background(Color(0xFF25D366), CircleShape)
+                                                        ) {
+                                                            Icon(Icons.Default.Chat, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showRemindersDialog = false }) {
+                                    Text("Fechar")
+                                }
+                            }
+                        )
+                    }
                 }
             }
 

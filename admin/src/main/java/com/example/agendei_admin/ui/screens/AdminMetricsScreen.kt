@@ -72,8 +72,15 @@ fun AdminMetricsScreen(onBack: () -> Unit) {
     
     val expiredSalons = (totalSalons - activeSubscriptions - trialSalons).coerceAtLeast(0)
 
-    val mrr = activeSubscriptions * price
-    val grossRevenue = activeSubscriptions * price // Faturamento acumulado estimado atual mensal
+    val mrr = salons.filter { it.isSubscribed }.sumOf { salon ->
+        when (salon.subscriptionPlan) {
+            "BRONZE" -> 110.0
+            "PRATA" -> 150.0
+            "OURO" -> 200.0
+            else -> 150.0
+        }
+    }
+    val grossRevenue = mrr
     
     val churnRate = if (totalSalons > 0) (expiredSalons.toFloat() / totalSalons.toFloat()) * 100f else 0f
     val ltv = if (churnRate > 0f) price / (churnRate / 100f) else mrr

@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.EventNote
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Star
 import android.content.Intent
 import android.provider.CalendarContract
 
@@ -49,6 +50,7 @@ fun SchedulingScreen(
     preselectedServiceId: String? = null,
     userProfile: UserProfile? = null,
     onSavePhone: ((String) -> Unit)? = null,
+    preselectedProfessionalId: String? = null,
     viewModel: SchedulingViewModel = viewModel(),
     onNavigateBack: () -> Unit,
     onSuccess: () -> Unit
@@ -64,6 +66,7 @@ fun SchedulingScreen(
     val availableSlots by viewModel.availableSlots.collectAsState()
     val isSuccess by viewModel.isSuccess.collectAsState()
     val isLoyaltyEligible by viewModel.isLoyaltyEligible.collectAsState()
+    val professionalRatings by viewModel.professionalRatings.collectAsState()
 
     var step by remember { mutableIntStateOf(1) }
     var selectedDateMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -72,6 +75,15 @@ fun SchedulingScreen(
     var showWaitingPhoneCaptureDialog by remember { mutableStateOf(false) }
     var showWaitingConfirmDialog by remember { mutableStateOf(false) }
     var joinedWaitingList by remember { mutableStateOf(false) }
+
+    LaunchedEffect(professionals, preselectedProfessionalId) {
+        if (!preselectedProfessionalId.isNullOrBlank() && professionals.isNotEmpty()) {
+            val targetPro = professionals.find { it.id == preselectedProfessionalId }
+            if (targetPro != null) {
+                viewModel.selectProfessional(targetPro)
+            }
+        }
+    }
     
     val datePickerState = rememberDatePickerState(
         initialSelectedDateMillis = selectedDateMillis,
@@ -132,6 +144,8 @@ fun SchedulingScreen(
             3 -> {
                 if (professionals.isEmpty()) {
                     step = 1
+                } else if (preselectedProfessionalId != null) {
+                    step = 1
                 } else {
                     step = 2
                 }
@@ -183,9 +197,13 @@ fun SchedulingScreen(
                     val filteredServices = if (selectedCategory == "TODOS") services 
                                           else services.filter { it.category == selectedCategory }
 
-                    ServiceSelectionList(filteredServices) { 
-                        viewModel.selectService(it)
-                        step = 2 
+                    ServiceSelectionList(filteredServices) { service ->
+                        viewModel.selectService(service)
+                        if (selectedProfessional != null) {
+                            step = 3
+                        } else {
+                            step = 2
+                        }
                     }
                 }
                 2 -> {
@@ -324,11 +342,33 @@ fun SchedulingScreen(
                                                 } else {
                                                     "Especialista neste serviço"
                                                 }
-                                                Text(
-                                                    text = subtitleText,
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.outline
-                                                )
+                                                val proRating = professionalRatings[pro.id]
+                                                if (proRating != null) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        modifier = Modifier.padding(top = 2.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Star,
+                                                            contentDescription = "Nota",
+                                                            tint = Color(0xFFFFB300),
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                        Text(
+                                                            text = String.format(Locale.US, "%.1f (%d avaliações)", proRating.first, proRating.second),
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                } else {
+                                                    Text(
+                                                        text = subtitleText,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.outline
+                                                    )
+                                                }
                                             }
 
                                             val salonVal = viewModel.salon.collectAsState().value

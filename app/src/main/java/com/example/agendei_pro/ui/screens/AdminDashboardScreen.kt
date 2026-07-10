@@ -16,6 +16,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.agendei_pro.core.model.Salon
 
+import androidx.compose.foundation.BorderStroke
+import java.util.Locale
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminDashboardScreen(
@@ -23,6 +26,18 @@ fun AdminDashboardScreen(
     onGiftPremium: (String) -> Unit,
     onNavigateBack: () -> Unit
 ) {
+    val totalSalons = salons.size
+    val premiumSalons = salons.count { it.isSubscribed }
+    val trialSalons = totalSalons - premiumSalons
+    val mrr = salons.filter { it.isSubscribed }.sumOf { salon ->
+        when (salon.subscriptionPlan) {
+            "BRONZE" -> 110.0
+            "PRATA" -> 150.0
+            "OURO" -> 200.0
+            else -> 150.0
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -34,13 +49,64 @@ fun AdminDashboardScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).padding(16.dp)) {
+            // Card de KPIs SaaS Premium
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Métricas SaaS (Visão Geral)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text("Salões Ativos", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                            Text("$totalSalons", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                        }
+                        Column {
+                            Text("Premium", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                            Text("$premiumSalons", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = Color(0xFF4CAF50))
+                        }
+                        Column {
+                            Text("Trial", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                            Text("$trialSalons", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = Color(0xFFFF9800))
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.1f))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("MRR Estimado (Receita Mensal)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            text = java.text.NumberFormat.getCurrencyInstance(Locale("pt", "BR")).format(mrr),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+
             Text(
-                text = "Total de Salões: ${salons.size}",
+                text = "Lista de Salões",
                 style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(bottom = 16.dp)
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 12.dp)
             )
 
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
                 items(salons) { salon ->
                     SalonAdminCard(salon, onGiftPremium)
                 }

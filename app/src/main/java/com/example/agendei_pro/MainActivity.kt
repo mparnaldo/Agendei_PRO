@@ -274,7 +274,15 @@ class MainActivity : ComponentActivity() {
                                             daysRemaining = state.daysRemaining,
                                             pendingAppointments = pendingSalonAppointments,
                                             userPhotoUrl = userProfile?.photoUrl,
-                                            globalAnnouncement = globalAnnouncement,
+                                            globalAnnouncement = globalAnnouncement?.let { ann ->
+                                                val targetSegment = ann.targetSegment ?: "ALL"
+                                                val targetStatus = ann.targetStatus ?: "ALL"
+                                                
+                                                val matchesSegment = targetSegment == "ALL" || state.salon.segment == targetSegment || state.salon.additionalSegments.contains(targetSegment)
+                                                val matchesStatus = targetStatus == "ALL" || (targetStatus == "TRIAL" && !state.salon.isSubscribed) || (targetStatus == "PREMIUM" && state.salon.isSubscribed)
+                                                
+                                                if (matchesSegment && matchesStatus) ann else null
+                                            },
                                             onManageServices = { navController.navigate("services") },
                                             onViewAgenda = { navController.navigate("agenda") },
                                             onFinancialClick = { navController.navigate("salon_performance") },
@@ -303,7 +311,11 @@ class MainActivity : ComponentActivity() {
                                                 globalAnnouncement = globalAnnouncement,
                                                 salonAnnouncement = salonAnnouncement,
                                                 isBlocked = binding.isBlocked,
+                                                favoriteProfessionalId = binding.favoriteProfessionalId,
+                                                favoriteProfessionalName = binding.favoriteProfessionalName,
+                                                favoriteProfessionalPhotoUrl = binding.favoriteProfessionalPhotoUrl,
                                                 onNewAppointment = { navController.navigate("scheduling/${binding.salonId}") },
+                                                onNewAppointmentWithPro = { proId -> navController.navigate("scheduling/${binding.salonId}?professionalId=$proId") },
                                                 onReorderAppointment = { appt ->
                                                     navController.navigate("scheduling/${binding.salonId}?serviceId=${appt.serviceId}")
                                                 },
@@ -417,17 +429,20 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                                 composable(
-                                    route = "scheduling/{salonId}?serviceId={serviceId}",
+                                    route = "scheduling/{salonId}?serviceId={serviceId}&professionalId={professionalId}",
                                     arguments = listOf(
                                         navArgument("salonId") { type = NavType.StringType },
-                                        navArgument("serviceId") { type = NavType.StringType; nullable = true; defaultValue = null }
+                                        navArgument("serviceId") { type = NavType.StringType; nullable = true; defaultValue = null },
+                                        navArgument("professionalId") { type = NavType.StringType; nullable = true; defaultValue = null }
                                     )
                                 ) { backStackEntry ->
                                     val salonId = backStackEntry.arguments?.getString("salonId") ?: ""
                                     val serviceId = backStackEntry.arguments?.getString("serviceId")
+                                    val professionalId = backStackEntry.arguments?.getString("professionalId")
                                     SchedulingScreen(
                                         salonId = salonId,
                                         preselectedServiceId = serviceId,
+                                        preselectedProfessionalId = professionalId,
                                         userProfile = userProfile,
                                         onSavePhone = { phone -> viewModel.updateProfile(userProfile?.name ?: "Cliente", phone) },
                                         onNavigateBack = { navController.popBackStack() },

@@ -179,6 +179,7 @@ class NotificationService : Service() {
                         }
                         val currentIds = currentAppts.map { it.id }.toSet()
                         appointmentStatuses.keys.retainAll(currentIds)
+                        checkSmartRebooking(userId, currentAppts)
                     }
                 }
 
@@ -320,6 +321,48 @@ class NotificationService : Service() {
             showLocalNotification(this, title, message, iconResId)
         } else {
             showLocalNotification(this, title, message)
+        }
+    }
+
+    private fun checkSmartRebooking(userId: String, appts: List<Appointment>) {
+        val pastAppts = appts.filter { it.status == "CONFIRMED" && it.date != null }
+            .sortedBy { it.date }
+        
+        if (pastAppts.size < 3) return
+        
+        var totalDays = 0L
+        for (i in 0 until pastAppts.size - 1) {
+            val diffMs = pastAppts[i+1].date!!.time - pastAppts[i].date!!.time
+            val diffDays = diffMs / (1000 * 60 * 60 * 24)
+            totalDays += diffDays
+        }
+        val avgIntervalDays = totalDays / (pastAppts.size - 1)
+        
+        if (avgIntervalDays < 5) return
+        
+        val today = Date()
+        val hasFutureBooking = appts.any { 
+            it.status == "PENDING" || (it.status == "CONFIRMED" && it.date != null && !it.date.before(today)) 
+        }
+        if (hasFutureBooking) return
+        
+        val lastApptDate = pastAppts.last().date!!
+        val diffFromLastMs = today.time - lastApptDate.time
+        val daysSinceLast = diffFromLastMs / (1000 * 60 * 60 * 24)
+        
+        val targetTriggerDays = avgIntervalDays - 2
+        if (daysSinceLast >= targetTriggerDays) {
+            val prefs = getSharedPreferences("smart_rebooking_prefs", Context.MODE_PRIVATE)
+            val lastNotifiedCycleKey = "last_notified_${userId}_${lastApptDate.time}"
+            val alreadyNotified = prefs.getBoolean(lastNotifiedCycleKey, false)
+            
+            if (!alreadyNotified) {
+                prefs.edit().putBoolean(lastNotifiedCycleKey, true).apply()
+                showNotification(
+                    "Hora de voltar? ✂️",
+                    "Que tal agendar seu próximo horário? Já faz ${daysSinceLast} dias desde o seu último atendimento."
+                )
+            }
         }
     }
 

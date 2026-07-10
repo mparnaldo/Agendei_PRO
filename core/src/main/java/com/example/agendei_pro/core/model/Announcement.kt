@@ -11,5 +11,7 @@ data class Announcement(
     val duration: String = "PERMANENT", // ONCE, DAY, WEEK, PERMANENT
     @ServerTimestamp
     val timestamp: Date? = null,
-    val expiresAt: Date? = null
+    val expiresAt: Date? = null,
+    val targetSegment: String? = "ALL",
+    val targetStatus: String? = "ALL"
 )

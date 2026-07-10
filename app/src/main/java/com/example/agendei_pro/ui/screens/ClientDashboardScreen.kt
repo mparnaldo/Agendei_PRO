@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -45,7 +47,11 @@ fun ClientDashboardScreen(
     globalAnnouncement: Announcement? = null,
     salonAnnouncement: Announcement? = null,
     isBlocked: Boolean = false,
+    favoriteProfessionalId: String? = null,
+    favoriteProfessionalName: String? = null,
+    favoriteProfessionalPhotoUrl: String? = null,
     onNewAppointment: () -> Unit,
+    onNewAppointmentWithPro: (String) -> Unit,
     onReorderAppointment: (Appointment) -> Unit,
     onMyAppointmentsClick: () -> Unit,
     onUnlinkSalon: () -> Unit,
@@ -274,8 +280,9 @@ fun ClientDashboardScreen(
             )
         }
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            if (isBlocked) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+                if (isBlocked) {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -571,6 +578,77 @@ fun ClientDashboardScreen(
                 }
             }
 
+            // Seção de Profissional Favorito
+            if (!favoriteProfessionalId.isNullOrBlank()) {
+                Card(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (!favoriteProfessionalPhotoUrl.isNullOrBlank()) {
+                            AsyncImage(
+                                model = favoriteProfessionalPhotoUrl,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.width(16.dp))
+                        
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Agendar com seu Favorito ❤️",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = favoriteProfessionalName ?: "Profissional Favorito",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        
+                        Button(
+                            onClick = {
+                                if (!isBlocked) {
+                                    onNewAppointmentWithPro(favoriteProfessionalId)
+                                }
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text("Agendar", fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -657,6 +735,71 @@ fun ClientDashboardScreen(
                         }
                     }
                 }
+            }
+            if (hasLoyalty && loyaltyState.activeRewardsCount > 0) {
+                ConfettiEffect()
+            }
+        }
+    }
+}
+
+data class ConfettiParticle(
+    val x: Float,
+    var y: Float,
+    val speed: Float,
+    val size: Float,
+    val color: Color,
+    val rotationSpeed: Float,
+    var rotation: Float = 0f
+)
+
+@Composable
+fun ConfettiEffect() {
+    val particles = remember {
+        List(60) {
+            ConfettiParticle(
+                x = (0..1000).random().toFloat() / 1000f,
+                y = -(0..500).random().toFloat(),
+                speed = (80..220).random().toFloat() / 10f,
+                size = (10..24).random().toFloat(),
+                color = Color(
+                    red = (100..255).random() / 255f,
+                    green = (100..255).random() / 255f,
+                    blue = (100..255).random() / 255f,
+                    alpha = 1f
+                ),
+                rotationSpeed = (-4..4).random().toFloat()
+            )
+        }
+    }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "confetti")
+    val progress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(4500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "progress"
+    )
+
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val width = size.width
+        val height = size.height
+        
+        for (p in particles) {
+            val currentY = p.y + (progress * height * (p.speed / 12f))
+            val currentX = p.x * width
+            p.rotation += p.rotationSpeed
+            
+            if (currentY in 0f..height) {
+                drawRect(
+                    color = p.color,
+                    topLeft = Offset(currentX, currentY),
+                    size = androidx.compose.ui.geometry.Size(p.size, p.size * 1.4f),
+                    alpha = (1f - (currentY / height)).coerceIn(0f, 1f)
+                )
             }
         }
     }

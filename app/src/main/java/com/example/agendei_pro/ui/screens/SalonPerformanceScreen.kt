@@ -26,6 +26,11 @@ import com.example.agendei_pro.core.model.Professional
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import java.text.NumberFormat
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.graphics.drawscope.Stroke
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -98,6 +103,37 @@ fun SalonPerformanceScreen(onBack: () -> Unit) {
         .sumOf { it.servicePrice }
 
     val totalEstimated = realizedRevenue + expectedRevenue
+
+    val ticketMedio = remember(totalEstimated, totalCount, cancelledCount) {
+        val completedCount = totalCount - cancelledCount
+        if (completedCount > 0) totalEstimated / completedCount else 0.0
+    }
+
+    val last6MonthsRevenue = remember(appointments) {
+        val cal = Calendar.getInstance()
+        val result = mutableListOf<Pair<String, Double>>()
+        val sdf = SimpleDateFormat("MMM", Locale("pt", "BR"))
+        
+        for (i in 5 downTo 0) {
+            val monthCal = Calendar.getInstance().apply {
+                add(Calendar.MONTH, -i)
+            }
+            val monthYearKey = "${monthCal.get(Calendar.YEAR)}_${monthCal.get(Calendar.MONTH)}"
+            val label = sdf.format(monthCal.time).replace(".", "").uppercase()
+            
+            val revenue = appointments.filter { appt ->
+                val date = appt.date
+                if (date != null && (appt.status == "CONFIRMED" || appt.status == "SERVED")) {
+                    cal.time = date
+                    val apptMonthYear = "${cal.get(Calendar.YEAR)}_${cal.get(Calendar.MONTH)}"
+                    apptMonthYear == monthYearKey
+                } else false
+            }.sumOf { it.servicePrice }
+            
+            result.add(Pair(label, revenue))
+        }
+        result
+    }
 
     // 2. Taxa de Cancelamento
     val totalCount = filteredAppointments.size
@@ -211,8 +247,27 @@ fun SalonPerformanceScreen(onBack: () -> Unit) {
                                 Text(currencyFormatter.format(expectedRevenue), fontWeight = FontWeight.Bold, color = Color(0xFF2196F3), fontSize = 16.sp)
                             }
                         }
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.15f))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Ticket Médio por Atendimento", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text(currencyFormatter.format(ticketMedio), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        }
                     }
                 }
+
+                // Gráfico Mensal (Últimos 6 Meses)
+                MonthlyRevenueChart(last6MonthsRevenue, currencyFormatter)
+
+                // Gráfico de Pizza (Serviços Mais Lucrativos)
+                ServicesRevenuePieChart(servicesRanking, currencyFormatter)
 
                 // Card de Taxa de Cancelamento e Visão de Agendamentos
                 Row(
@@ -373,3 +428,174 @@ data class Quadruple<out A, out B, out C, out D>(
     val third: C,
     val fourth: D
 )
+
+@Composable
+fun MonthlyRevenueChart(data: List<Pair<String, Double>>, currencyFormatter: NumberFormat) {
+    val maxRevenue = remember(data) { data.maxOfOrNull { it.second }?.toFloat()?.coerceAtLeast(1f) ?: 1f }
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val outlineColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+    
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Evolução Mensal (Últimos 6 Meses)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(160.dp)
+            ) {
+                val canvasWidth = size.width
+                val canvasHeight = size.height
+                val paddingBottom = 40f
+                val paddingTop = 20f
+                val paddingLeft = 20f
+                val paddingRight = 20f
+                
+                val chartHeight = canvasHeight - paddingTop - paddingBottom
+                val barWidth = (canvasWidth - paddingLeft - paddingRight) / (data.size * 2f - 1f)
+                
+                for (i in data.indices) {
+                    val (label, valDouble) = data[i]
+                    val valFloat = valDouble.toFloat()
+                    val barHeight = (valFloat / maxRevenue) * chartHeight
+                    
+                    val x = paddingLeft + (i * 2 * barWidth)
+                    val y = canvasHeight - paddingBottom - barHeight
+                    
+                    drawRoundRect(
+                        color = primaryColor,
+                        topLeft = Offset(x, y),
+                        size = androidx.compose.ui.geometry.Size(barWidth, barHeight.coerceAtLeast(4f)),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                    )
+                    
+                    drawContext.canvas.nativeCanvas.apply {
+                        val textPaint = android.text.TextPaint().apply {
+                            color = android.graphics.Color.GRAY
+                            textSize = 28f
+                            textAlign = android.graphics.Paint.Align.CENTER
+                        }
+                        drawText(label, x + barWidth / 2f, canvasHeight - 8f, textPaint)
+                    }
+                    
+                    if (valFloat > 0) {
+                        drawContext.canvas.nativeCanvas.apply {
+                            val textPaint = android.text.TextPaint().apply {
+                                color = android.graphics.Color.DKGRAY
+                                textSize = 22f
+                                textAlign = android.graphics.Paint.Align.CENTER
+                                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                            }
+                            val formattedVal = if (valFloat >= 1000f) String.format(Locale.getDefault(), "R$ %.1fk", valFloat / 1000f) else String.format(Locale.getDefault(), "R$ %.0f", valFloat)
+                            drawText(formattedVal, x + barWidth / 2f, y - 8f, textPaint)
+                        }
+                    }
+                }
+                
+                drawLine(
+                    color = outlineColor,
+                    start = Offset(0f, canvasHeight - paddingBottom),
+                    end = Offset(canvasWidth, canvasHeight - paddingBottom),
+                    strokeWidth = 2f
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ServicesRevenuePieChart(servicesRanking: List<Triple<String, Int, Double>>, currencyFormatter: NumberFormat) {
+    val totalRevenue = remember(servicesRanking) { servicesRanking.sumOf { it.third }.toFloat() }
+    val colors = listOf(
+        Color(0xFF2196F3),
+        Color(0xFF4CAF50),
+        Color(0xFFFF9800),
+        Color(0xFF9C27B0),
+        Color(0xFFE91E63)
+    )
+    
+    val slices = remember(servicesRanking, totalRevenue) {
+        if (totalRevenue <= 0f) return@remember emptyList<Pair<String, Float>>()
+        val top = servicesRanking.take(4).map { Pair(it.first, it.third.toFloat()) }.toMutableList()
+        if (servicesRanking.size > 4) {
+            val othersSum = servicesRanking.drop(4).sumOf { it.third }.toFloat()
+            if (othersSum > 0f) {
+                top.add(Pair("Outros", othersSum))
+            }
+        }
+        top
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Faturamento por Serviço", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            if (slices.isEmpty()) {
+                Box(modifier = Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                    Text("Sem faturamento no período.", color = MaterialTheme.colorScheme.outline)
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Canvas(
+                        modifier = Modifier
+                            .size(110.dp)
+                            .weight(1f)
+                    ) {
+                        var startAngle = -90f
+                        for (i in slices.indices) {
+                            val (_, value) = slices[i]
+                            val sweepAngle = (value / totalRevenue) * 360f
+                            drawArc(
+                                color = colors[i % colors.size],
+                                startAngle = startAngle,
+                                sweepAngle = sweepAngle,
+                                useCenter = false,
+                                style = Stroke(width = 16.dp.toPx())
+                            )
+                            startAngle += sweepAngle
+                        }
+                    }
+                    
+                    Column(
+                        modifier = Modifier.weight(1.2f),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        for (i in slices.indices) {
+                            val (name, value) = slices[i]
+                            val percentage = (value / totalRevenue) * 100f
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(colors[i % colors.size])
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Column {
+                                    Text(name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                    Text(
+                                        text = "${currencyFormatter.format(value)} (${String.format(Locale.US, "%.1f%%", percentage)})",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

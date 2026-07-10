@@ -113,6 +113,17 @@ fun AdminSettingsScreen(onBack: () -> Unit) {
                     batch.set(db.collection("config").document("announcement"), mapOf("message" to alertMessage))
                     
                     batch.commit().addOnSuccessListener {
+                        val adminUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                        val auditLog = mapOf(
+                            "adminUid" to (adminUser?.uid ?: ""),
+                            "adminEmail" to (adminUser?.email ?: ""),
+                            "action" to "UPDATE_CONFIG",
+                            "targetId" to "pricing_announcement",
+                            "details" to "Preços atualizados: Bronze=$priceBronze, Prata=$pricePrata, Ouro=$priceOuro. Alerta global atualizado: '$alertMessage'",
+                            "timestamp" to java.util.Date()
+                        )
+                        db.collection("admin_logs").add(auditLog)
+
                         isLoading = false
                         Toast.makeText(context, "Configurações salvas com sucesso!", Toast.LENGTH_SHORT).show()
                     }.addOnFailureListener {

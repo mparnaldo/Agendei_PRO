@@ -131,6 +131,17 @@ fun AdminSalonsScreen(onBack: () -> Unit) {
                                         "isSubscribed" to (selectedPlan != "TRIAL")
                                     ))
                                     .addOnSuccessListener {
+                                        val adminUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                                        val auditLog = mapOf(
+                                            "adminUid" to (adminUser?.uid ?: ""),
+                                            "adminEmail" to (adminUser?.email ?: ""),
+                                            "action" to "GIFT_PREMIUM",
+                                            "targetId" to salon.id,
+                                            "details" to "Alterado plano do salão '${salon.name}' para $selectedPlan (Max Prof: $maxProfs)",
+                                            "timestamp" to Date()
+                                        )
+                                        db.collection("admin_logs").add(auditLog)
+                                        
                                         Toast.makeText(context, "Plano atualizado!", Toast.LENGTH_SHORT).show()
                                         editingSalonPlan = null
                                     }

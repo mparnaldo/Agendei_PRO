@@ -24,6 +24,8 @@ fun AdminBroadcastScreen(onBack: () -> Unit) {
     var targetTopic by remember { mutableStateOf("salons") } // salons ou clients
     var displayType by remember { mutableStateOf("BANNER") } // BANNER, POPUP, NONE (Apenas Push)
     var duration by remember { mutableStateOf("PERMANENT") } // ONCE, DAY, WEEK, PERMANENT
+    var segmentFilter by remember { mutableStateOf("ALL") }
+    var statusFilter by remember { mutableStateOf("ALL") }
     var isLoading by remember { mutableStateOf(false) }
 
     val db = FirebaseFirestore.getInstance()
@@ -88,6 +90,38 @@ fun AdminBroadcastScreen(onBack: () -> Unit) {
                     onClick = { targetTopic = "clients" },
                     label = { Text("Clientes") }
                 )
+            }
+
+            if (targetTopic == "salons") {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("Segmentação por Ramo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Row(
+                    modifier = Modifier.padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf("ALL" to "Todos", "BARBEARIA" to "Barbearia", "ESTETICA" to "Estética", "MANICURE" to "Manicure").forEach { (id, label) ->
+                        FilterChip(
+                            selected = segmentFilter == id,
+                            onClick = { segmentFilter = id },
+                            label = { Text(label) }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("Segmentação por Plano", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Row(
+                    modifier = Modifier.padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf("ALL" to "Todos", "TRIAL" to "Trial", "PREMIUM" to "Premium").forEach { (id, label) ->
+                        FilterChip(
+                            selected = statusFilter == id,
+                            onClick = { statusFilter = id },
+                            label = { Text(label) }
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -164,6 +198,8 @@ fun AdminBroadcastScreen(onBack: () -> Unit) {
                         "title" to title,
                         "message" to message,
                         "target" to targetTopic,
+                        "targetSegment" to (if (targetTopic == "salons") segmentFilter else "ALL"),
+                        "targetStatus" to (if (targetTopic == "salons") statusFilter else "ALL"),
                         "timestamp" to Date()
                     )
                     batch.set(broadcastRef, broadcastData)
@@ -184,7 +220,9 @@ fun AdminBroadcastScreen(onBack: () -> Unit) {
                             "message" to message,
                             "displayType" to displayType,
                             "expiresAt" to expiresAt,
-                            "duration" to duration
+                            "duration" to duration,
+                            "targetSegment" to (if (targetTopic == "salons") segmentFilter else "ALL"),
+                            "targetStatus" to (if (targetTopic == "salons") statusFilter else "ALL")
                         )
                         batch.set(configRef, announcementData)
                     } else {
@@ -193,6 +231,17 @@ fun AdminBroadcastScreen(onBack: () -> Unit) {
                     }
 
                     batch.commit().addOnSuccessListener {
+                        val adminUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                        val auditLog = mapOf(
+                            "adminUid" to (adminUser?.uid ?: ""),
+                            "adminEmail" to (adminUser?.email ?: ""),
+                            "action" to "SEND_BROADCAST",
+                            "targetId" to broadcastRef.id,
+                            "details" to "Enviado comunicado: '$title' para o canal $targetTopic (Segmento: $segmentFilter, Plano: $statusFilter)",
+                            "timestamp" to Date()
+                        )
+                        db.collection("admin_logs").add(auditLog)
+
                         isLoading = false
                         Toast.makeText(context, "Mensagem enviada com sucesso!", Toast.LENGTH_SHORT).show()
                         title = ""
