@@ -16,12 +16,15 @@ fun AdminDashboardScreen(
     onNavigateToClients: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToMetrics: () -> Unit,
-    onNavigateToBroadcast: () -> Unit
+    onNavigateToBroadcast: () -> Unit,
+    onNavigateToSupport: () -> Unit
 ) {
     Scaffold(
         topBar = { TopAppBar(title = { Text("Painel de Controle Imperial") }) }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).padding(16.dp)) {
+            AdminCard("Chamados de Suporte", "Atender dúvidas pendentes de salões e clientes", Icons.Default.SupportAgent, onNavigateToSupport)
+            Spacer(modifier = Modifier.height(16.dp))
             AdminCard("Gerenciar Salões", "Ver trials, assinaturas e presentear", Icons.Default.Store, onNavigateToSalons)
             Spacer(modifier = Modifier.height(16.dp))
             AdminCard("Lista de Clientes", "Ver todos os usuários do app cliente", Icons.Default.People, onNavigateToClients)

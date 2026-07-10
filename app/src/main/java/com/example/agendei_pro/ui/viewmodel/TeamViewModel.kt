@@ -150,23 +150,36 @@ class TeamViewModel(
     }
 
     fun fetchGoogleProfilePhoto(email: String, onResult: (String?, String?, String?) -> Unit) {
-        if (email.isBlank()) {
+        val trimmedEmail = email.trim()
+        if (trimmedEmail.isBlank()) {
             onResult(null, null, "E-mail inválido")
             return
         }
         viewModelScope.launch {
             try {
-                val query = db.collection("profiles")
-                    .whereEqualTo("email", email.trim().lowercase())
+                // 1. Tentar buscar em minúsculo (padrão)
+                var query = db.collection("profiles")
+                    .whereEqualTo("email", trimmedEmail.lowercase())
                     .get()
                     .await()
-                val profileDoc = query.documents.firstOrNull()
+                
+                var profileDoc = query.documents.firstOrNull()
+                
+                // 2. Se não achar, tentar buscar com a grafia original digitada
+                if (profileDoc == null) {
+                    query = db.collection("profiles")
+                        .whereEqualTo("email", trimmedEmail)
+                        .get()
+                        .await()
+                    profileDoc = query.documents.firstOrNull()
+                }
+
                 if (profileDoc != null) {
                     val photoUrl = profileDoc.getString("photoUrl")
                     val name = profileDoc.getString("name")
                     onResult(photoUrl, name, null)
                 } else {
-                    onResult(null, null, "Nenhum usuário do Agendei encontrado com este e-mail.")
+                    onResult(null, null, "Nenhum usuário do Agendei encontrado com este e-mail. Peça para o profissional fazer login no aplicativo pelo menos uma vez para criar a conta.")
                 }
             } catch (e: Exception) {
                 onResult(null, null, "Erro ao buscar: ${e.message}")

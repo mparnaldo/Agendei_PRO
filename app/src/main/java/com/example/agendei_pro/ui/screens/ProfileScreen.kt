@@ -97,11 +97,21 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            val phoneTransformation = remember { com.example.agendei_pro.ui.utils.PhoneVisualTransformation() }
             OutlinedTextField(
                 value = phoneNumber,
-                onValueChange = { phoneNumber = it },
+                onValueChange = { input ->
+                    val cleanInput = input.filter { it.isDigit() }
+                    if (cleanInput.length <= 11) {
+                        phoneNumber = cleanInput
+                    }
+                },
                 label = { Text("Seu WhatsApp / Telefone") },
                 placeholder = { Text("(11) 99999-9999") },
+                visualTransformation = phoneTransformation,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                ),
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )

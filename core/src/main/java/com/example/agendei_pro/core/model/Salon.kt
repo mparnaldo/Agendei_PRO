@@ -25,6 +25,7 @@ data class Salon(
     val logoUrl: String? = null,
     val logoShape: String = "ROUND",
     val segment: String = "BARBEARIA", // BARBEARIA, CABELEIREIRO, MANICURE, ESTETICA
+    val additionalSegments: List<String> = emptyList(),
     @get:PropertyName("hasLoyaltyProgram")
     @field:PropertyName("hasLoyaltyProgram")
     val hasLoyaltyProgram: Boolean = false,

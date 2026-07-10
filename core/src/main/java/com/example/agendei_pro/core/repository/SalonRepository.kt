@@ -73,11 +73,14 @@ class SalonRepository {
         }
     }
 
-    suspend fun registerSalon(name: String, address: String, phone: String, segment: String): Result<Salon> {
+    suspend fun registerSalon(name: String, address: String, phone: String, segments: List<String>): Result<Salon> {
         val user = auth.currentUser ?: return Result.failure(Exception("Não logado"))
         val numbers = (1000..9999).random().toString()
         val letters = ('A'..'Z').shuffled().take(2).joinToString("")
         val generatedCode = "PRO-$numbers$letters"
+        
+        val primarySegment = segments.firstOrNull() ?: "BARBEARIA"
+        val additional = if (segments.size > 1) segments.drop(1) else emptyList()
         
         val newSalon = Salon(
             id = user.uid,
@@ -88,7 +91,8 @@ class SalonRepository {
             phoneNumber = phone,
             trialStartDate = Date(),
             isSubscribed = false,
-            segment = segment
+            segment = primarySegment,
+            additionalSegments = additional
         )
 
         return try {
@@ -175,7 +179,7 @@ class SalonRepository {
         days: List<Int>,
         autoAccept: Boolean,
         logoShape: String,
-        segment: String,
+        segments: List<String>,
         hasLoyalty: Boolean,
         loyaltyRequired: Int,
         loyaltyReward: String,
@@ -188,6 +192,9 @@ class SalonRepository {
         minCancelDelayHours: Int
     ): Result<Unit> {
         val user = auth.currentUser ?: return Result.failure(Exception("Não logado"))
+        val primarySegment = segments.firstOrNull() ?: "BARBEARIA"
+        val additional = if (segments.size > 1) segments.drop(1) else emptyList()
+        
         return try {
             firestore.collection("salons").document(user.uid).update(mapOf(
                 "name" to name,
@@ -198,7 +205,8 @@ class SalonRepository {
                 "workingDays" to days,
                 "autoAccept" to autoAccept,
                 "logoShape" to logoShape,
-                "segment" to segment,
+                "segment" to primarySegment,
+                "additionalSegments" to additional,
                 "hasLoyaltyProgram" to hasLoyalty,
                 "loyaltyRequiredServices" to loyaltyRequired,
                 "loyaltyRewardDescription" to loyaltyReward,

@@ -37,6 +37,7 @@ fun SalonSettingsScreen(
     currentLogoUrl: String?,
     currentLogoShape: String,
     currentSegment: String,
+    currentAdditionalSegments: List<String> = emptyList(),
     currentHasLoyalty: Boolean,
     currentLoyaltyRequired: Int,
     currentLoyaltyReward: String,
@@ -57,7 +58,7 @@ fun SalonSettingsScreen(
         days: List<Int>,
         autoAccept: Boolean,
         logoShape: String,
-        segment: String,
+        segments: List<String>,
         hasLoyalty: Boolean,
         loyaltyRequired: Int,
         loyaltyReward: String,
@@ -81,7 +82,14 @@ fun SalonSettingsScreen(
     var selectedDays by remember { mutableStateOf(currentDays) }
     var autoAccept by remember { mutableStateOf(currentAutoAccept) }
     var logoShape by remember { mutableStateOf(currentLogoShape) }
-    var segment by remember { mutableStateOf(currentSegment) }
+    
+    val selectedSegments = remember { 
+        mutableStateListOf<String>().apply {
+            add(currentSegment)
+            addAll(currentAdditionalSegments)
+        }
+    }
+    
     var hasLoyalty by remember { mutableStateOf(currentHasLoyalty) }
     var loyaltyRequired by remember { mutableStateOf(currentLoyaltyRequired.toString()) }
     var loyaltyReward by remember { mutableStateOf(currentLoyaltyReward) }
@@ -216,15 +224,27 @@ fun SalonSettingsScreen(
                             SegmentCard(
                                 label = "Barbearia",
                                 icon = Icons.Default.ContentCut,
-                                selected = segment == "BARBEARIA",
-                                onClick = { segment = "BARBEARIA" },
+                                selected = selectedSegments.contains("BARBEARIA"),
+                                onClick = {
+                                    if (selectedSegments.contains("BARBEARIA")) {
+                                        if (selectedSegments.size > 1) selectedSegments.remove("BARBEARIA")
+                                    } else {
+                                        selectedSegments.add("BARBEARIA")
+                                    }
+                                },
                                 modifier = Modifier.weight(1f)
                             )
                             SegmentCard(
                                 label = "Salão / Cabelo",
                                 icon = Icons.Default.Face,
-                                selected = segment == "CABELEIREIRO",
-                                onClick = { segment = "CABELEIREIRO" },
+                                selected = selectedSegments.contains("CABELEIREIRO"),
+                                onClick = {
+                                    if (selectedSegments.contains("CABELEIREIRO")) {
+                                        if (selectedSegments.size > 1) selectedSegments.remove("CABELEIREIRO")
+                                    } else {
+                                        selectedSegments.add("CABELEIREIRO")
+                                    }
+                                },
                                 modifier = Modifier.weight(1f)
                             )
                         }
@@ -232,15 +252,27 @@ fun SalonSettingsScreen(
                             SegmentCard(
                                 label = "Manicure",
                                 icon = Icons.Default.Brush,
-                                selected = segment == "MANICURE",
-                                onClick = { segment = "MANICURE" },
+                                selected = selectedSegments.contains("MANICURE"),
+                                onClick = {
+                                    if (selectedSegments.contains("MANICURE")) {
+                                        if (selectedSegments.size > 1) selectedSegments.remove("MANICURE")
+                                    } else {
+                                        selectedSegments.add("MANICURE")
+                                    }
+                                },
                                 modifier = Modifier.weight(1f)
                             )
                             SegmentCard(
                                 label = "Estética",
                                 icon = Icons.Default.Spa,
-                                selected = segment == "ESTETICA",
-                                onClick = { segment = "ESTETICA" },
+                                selected = selectedSegments.contains("ESTETICA"),
+                                onClick = {
+                                    if (selectedSegments.contains("ESTETICA")) {
+                                        if (selectedSegments.size > 1) selectedSegments.remove("ESTETICA")
+                                    } else {
+                                        selectedSegments.add("ESTETICA")
+                                    }
+                                },
                                 modifier = Modifier.weight(1f)
                             )
                         }
@@ -248,8 +280,14 @@ fun SalonSettingsScreen(
                             SegmentCard(
                                 label = "Estúdio de Tattoo",
                                 icon = Icons.Default.Palette,
-                                selected = segment == "TATTOO",
-                                onClick = { segment = "TATTOO" },
+                                selected = selectedSegments.contains("TATTOO"),
+                                onClick = {
+                                    if (selectedSegments.contains("TATTOO")) {
+                                        if (selectedSegments.size > 1) selectedSegments.remove("TATTOO")
+                                    } else {
+                                        selectedSegments.add("TATTOO")
+                                    }
+                                },
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
@@ -388,7 +426,7 @@ fun SalonSettingsScreen(
                         selectedDays, 
                         autoAccept, 
                         logoShape, 
-                        segment,
+                        selectedSegments.toList(),
                         hasLoyalty,
                         loyaltyRequired.toIntOrNull() ?: 10,
                         loyaltyReward,

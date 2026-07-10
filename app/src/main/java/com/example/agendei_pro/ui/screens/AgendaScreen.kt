@@ -1,5 +1,7 @@
 package com.example.agendei_pro.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -919,6 +921,7 @@ fun AppointmentItem(
     onUpdateStatus: (String, String) -> Unit,
     onDeleteBlockage: (String) -> Unit
 ) {
+    val context = LocalContext.current
     val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(appt.date ?: Date())
     val isPending = appt.status == "PENDING"
     val isBlocked = appt.status == "BLOCKED"
@@ -1088,6 +1091,29 @@ fun AppointmentItem(
                         }
                     }
                 }
+            }
+            
+            if (!isBlocked && !isCancelled && appt.clientPhone.isNotBlank()) {
+                IconButton(onClick = {
+                    try {
+                        val cleanPhone = appt.clientPhone.replace(Regex("[^0-9]"), "")
+                        val timeStr = SimpleDateFormat("HH:mm", Locale.getDefault()).format(appt.date ?: Date())
+                        val dateStr = SimpleDateFormat("dd/MM", Locale.getDefault()).format(appt.date ?: Date())
+                        val text = "Olá ${appt.clientName}! Passando para lembrar do seu agendamento de *${appt.serviceName}* no dia *$dateStr* às *$timeStr*. Nos vemos lá!"
+                        val urlEncoded = java.net.URLEncoder.encode(text, "UTF-8")
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            data = Uri.parse("https://api.whatsapp.com/send?phone=$cleanPhone&text=$urlEncoded")
+                        }
+                        context.startActivity(intent)
+                    } catch (e: Exception) {}
+                }) {
+                    Icon(
+                        imageVector = Icons.Default.Chat,
+                        contentDescription = "Lembrete WhatsApp",
+                        tint = Color(0xFF25D366)
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
             }
             
             if (isBlocked) {

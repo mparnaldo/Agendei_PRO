@@ -152,6 +152,8 @@ class AgendaViewModel(private val repository: AppointmentRepository = Appointmen
                     set(Calendar.SECOND, 0)
                     set(Calendar.MILLISECOND, 0)
                 }
+                val interval = _salon.value?.slotIntervalMinutes ?: 30
+                val duration = if (interval > 0) interval else 30
                 val appt = Appointment(
                     clientName = "Bloqueado: $reason",
                     clientUid = "BLOCKAGE",
@@ -162,7 +164,8 @@ class AgendaViewModel(private val repository: AppointmentRepository = Appointmen
                     date = cal.time,
                     status = "BLOCKED",
                     professionalId = professionalId,
-                    professionalName = professionalName
+                    professionalName = professionalName,
+                    serviceDurationMinutes = duration
                 )
                 repository.createAppointment(appt)
             } catch (e: Exception) {}

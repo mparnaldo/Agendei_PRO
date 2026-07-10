@@ -193,7 +193,9 @@ class SchedulingViewModel(
             val apptDate = appt.date ?: return@any false
             val apptStartMs = apptDate.time
             val durationMin = if (appt.serviceId == "BLOCKAGE") interval else {
-                _services.value.find { it.id == appt.serviceId }?.durationMinutes ?: 30
+                if (appt.serviceDurationMinutes > 0) appt.serviceDurationMinutes else {
+                    _services.value.find { it.id == appt.serviceId }?.durationMinutes ?: 30
+                }
             }
             val apptEndMs = apptStartMs + durationMin * 60 * 1000
             
@@ -432,9 +434,13 @@ class SchedulingViewModel(
                 appointmentRepository.redeemLoyaltyRewards(user.uid, salonId, limit, targetProId)
             }
 
+            val profile = com.example.agendei_pro.core.repository.ProfileRepository().getProfile()
+            val clientPhone = profile?.phoneNumber ?: ""
+
             val appt = Appointment(
                 clientName = user.displayName ?: "Cliente",
                 clientUid = user.uid,
+                clientPhone = clientPhone,
                 salonId = salonId,
                 serviceId = service.id,
                 serviceName = service.name,
@@ -452,7 +458,8 @@ class SchedulingViewModel(
                 loyaltyValidated = (isAutoAccept && isLoyaltyAutoValidate),
                 loyaltyRedeemed = isLoyaltyRedemption,
                 professionalId = assignedPro?.id ?: "",
-                professionalName = assignedPro?.name ?: ""
+                professionalName = assignedPro?.name ?: "",
+                serviceDurationMinutes = service.durationMinutes
             )
 
             if (appointmentRepository.createAppointment(appt).isSuccess) {

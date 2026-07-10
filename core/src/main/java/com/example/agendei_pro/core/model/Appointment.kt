@@ -8,6 +8,7 @@ data class Appointment(
     val id: String = "",
     val clientName: String = "",
     val clientUid: String = "",
+    val clientPhone: String = "",
     val salonId: String = "",
     val serviceId: String = "",
     val serviceName: String = "",
@@ -23,5 +24,6 @@ data class Appointment(
     val loyaltyRedeemed: Boolean = false,
     val professionalId: String = "",
     val professionalName: String = "",
-    val cancelledBy: String? = null
+    val cancelledBy: String? = null,
+    val serviceDurationMinutes: Int = 30
 )

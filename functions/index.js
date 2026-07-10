@@ -10,7 +10,7 @@ exports.notifyNewAppointment = onDocumentCreated("appointments/{id}", async (eve
   const appt = event.data.data();
   try {
     // Notifica o Salão
-    const profile = await admin.firestore().collection("profiles").document(appt.salonId).get();
+    const profile = await admin.firestore().collection("profiles").doc(appt.salonId).get();
     if (profile.exists && profile.data().fcmToken) {
       const isConfirmed = appt.status === "CONFIRMED";
       const title = isConfirmed ? "Agendamento Confirmado! ✅" : "Novo Agendamento! 📅";
@@ -31,9 +31,9 @@ exports.notifyNewAppointment = onDocumentCreated("appointments/{id}", async (eve
 
     // Notifica o Cliente caso tenha sido aceito automaticamente
     if (appt.status === "CONFIRMED") {
-      const clientProfile = await admin.firestore().collection("profiles").document(appt.clientUid).get();
+      const clientProfile = await admin.firestore().collection("profiles").doc(appt.clientUid).get();
       if (clientProfile.exists && clientProfile.data().fcmToken) {
-        const salon = await admin.firestore().collection("salons").document(appt.salonId).get();
+        const salon = await admin.firestore().collection("salons").doc(appt.salonId).get();
         const salonName = salon.exists ? salon.data().name : "O Salão";
 
         const clientMessage = {
@@ -62,8 +62,8 @@ exports.notifyStatusChanged = onDocumentUpdated("appointments/{id}", async (even
 
   if (before.status !== "CONFIRMED" && after.status === "CONFIRMED") {
     try {
-      const profile = await admin.firestore().collection("profiles").document(after.clientUid).get();
-      const salon = await admin.firestore().collection("salons").document(after.salonId).get();
+      const profile = await admin.firestore().collection("profiles").doc(after.clientUid).get();
+      const salon = await admin.firestore().collection("salons").doc(after.salonId).get();
       const salonName = salon.exists ? salon.data().name : "O Salão";
 
       if (!profile.exists || !profile.data().fcmToken) return null;
@@ -115,7 +115,7 @@ exports.notifySalonPromotion = onDocumentCreated("salons/{salonId}/promotions/{p
   const promo = event.data.data();
   const salonId = event.params.salonId;
   try {
-    const salon = await admin.firestore().collection("salons").document(salonId).get();
+    const salon = await admin.firestore().collection("salons").doc(salonId).get();
     const salonName = salon.exists ? salon.data().name : "Salão";
 
     const message = {
@@ -132,6 +132,54 @@ exports.notifySalonPromotion = onDocumentCreated("salons/{salonId}/promotions/{p
 
     await admin.messaging().send(message);
     console.log(`Promotion push sent to topic salon_${salonId}`);
+  } catch (e) {
+    console.error(e);
+  }
+  return null;
+});
+
+exports.notifySupportMessage = onDocumentCreated("support_chats/{chatId}/messages/{messageId}", async (event) => {
+  const msg = event.data.data();
+  const chatId = event.params.chatId;
+  try {
+    if (msg.sender === "ADMIN") {
+      // Notifica o usuário de que o suporte respondeu
+      const profile = await admin.firestore().collection("profiles").doc(chatId).get();
+      if (profile.exists && profile.data().fcmToken) {
+        const message = {
+          notification: {
+            title: "Suporte Agendei PRO 👑",
+            body: msg.text,
+          },
+          token: profile.data().fcmToken,
+          android: {
+            priority: "high",
+            notification: {channelId: "agendamentos_channel"},
+          },
+        };
+        await admin.messaging().send(message);
+        console.log(`Support response push sent to user ${chatId}`);
+      }
+    } else if (msg.sender === "USER") {
+      // Notifica o admin imperial sobre nova mensagem se o chamado estiver na fila humana
+      const chatDoc = await admin.firestore().collection("support_chats").doc(chatId).get();
+      const chatData = chatDoc.exists ? chatDoc.data() : null;
+      if (chatData && chatData.status === "PENDING_HUMAN") {
+        const message = {
+          notification: {
+            title: "Novo chamado de suporte! 🙋‍♂️",
+            body: `${chatData.userName} (${chatData.userType === "SALON" ? "Salão" : "Cliente"}): ${msg.text}`,
+          },
+          topic: "admin_support",
+          android: {
+            priority: "high",
+            notification: {channelId: "agendamentos_channel"},
+          },
+        };
+        await admin.messaging().send(message);
+        console.log(`Support request push sent to admins for chat ${chatId}`);
+      }
+    }
   } catch (e) {
     console.error(e);
   }

@@ -793,10 +793,19 @@ fun AddEditProfessionalDialog(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    // Chip especial para "Todos os Serviços"
+                    FilterChip(
+                        selected = selectedSpecialties.isEmpty(),
+                        onClick = {
+                            selectedSpecialties.clear()
+                        },
+                        label = { Text("🌟 Todos os Serviços") }
+                    )
+
                     allServices.forEach { service ->
                         val isSelected = selectedSpecialties.contains(service.id)
                         FilterChip(
-                            selected = isSelected,
+                            selected = isSelected && selectedSpecialties.isNotEmpty(),
                             onClick = {
                                 if (isSelected) {
                                     selectedSpecialties.remove(service.id)

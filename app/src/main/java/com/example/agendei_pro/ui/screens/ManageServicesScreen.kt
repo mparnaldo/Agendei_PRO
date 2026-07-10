@@ -283,17 +283,40 @@ fun getSmartImageUrls(name: String, segment: String): List<String> {
         else -> emptyList()
     }
 
-    if (list.isNotEmpty()) return list
+    val cleanQuery = cleanName
+        .replace(Regex("[^a-zA-Z0-9\\s]"), "")
+        .trim()
+        .replace(" ", ",")
 
-    // Step 2: Fall back to high-quality studio interiors if no keyword matches (prevents cats/irrelevant results)
-    return when (segment) {
-        "BARBEARIA" -> interiorBarbearia
-        "CABELEIREIRO" -> interiorCabeleireiro
-        "MANICURE" -> interiorManicure
-        "ESTETICA" -> interiorEstetica
-        "TATTOO" -> interiorTattoo
-        else -> genericSalon
+    val dynamicList = (1..5).map { lock ->
+        "https://loremflickr.com/500/500/$cleanQuery?lock=$lock"
     }
+
+    val segmentEng = when (segment) {
+        "BARBEARIA" -> "barber,haircut"
+        "CABELEIREIRO" -> "hairdresser,salon"
+        "MANICURE" -> "nails,manicure"
+        "ESTETICA" -> "skincare,massage"
+        "TATTOO" -> "tattoo,piercing"
+        else -> "salon"
+    }
+
+    val segmentList = (6..10).map { lock ->
+        "https://loremflickr.com/500/500/$segmentEng?lock=$lock"
+    }
+
+    val finalList = if (list.isNotEmpty()) list else {
+        when (segment) {
+            "BARBEARIA" -> interiorBarbearia
+            "CABELEIREIRO" -> interiorCabeleireiro
+            "MANICURE" -> interiorManicure
+            "ESTETICA" -> interiorEstetica
+            "TATTOO" -> interiorTattoo
+            else -> genericSalon
+        }
+    }
+
+    return finalList + dynamicList + segmentList
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -488,7 +511,10 @@ fun AddServiceDialog(
     onConfirm: (String, Double, Int, String, String, String, Uri?) -> Unit
 ) {
     var name by remember(prefilledService) { mutableStateOf(prefilledService?.name ?: "") }
-    var price by remember(prefilledService) { mutableStateOf(prefilledService?.defaultPrice?.toString() ?: "") }
+    val initialPrice = prefilledService?.defaultPrice?.let {
+        String.format(java.util.Locale("pt", "BR"), "R$ %.2f", it)
+    } ?: "R$ 0,00"
+    var price by remember(prefilledService) { mutableStateOf(initialPrice) }
     var duration by remember(prefilledService) { mutableStateOf(prefilledService?.defaultDuration?.toString() ?: "30") }
     var category by remember(prefilledService) { mutableStateOf(prefilledService?.category ?: "") }
     var observation by remember(prefilledObservation) { mutableStateOf(prefilledObservation) }
@@ -712,9 +738,20 @@ fun AddServiceDialog(
 
                 OutlinedTextField(
                     value = price, 
-                    onValueChange = { price = it }, 
-                    label = { Text("Preço (R$)") }, 
-                    modifier = Modifier.fillMaxWidth()
+                    onValueChange = { input ->
+                        val cleanDigits = input.replace(Regex("[^0-9]"), "")
+                        if (cleanDigits.length <= 9) {
+                            val parsed = cleanDigits.toDoubleOrNull() ?: 0.0
+                            val formatted = parsed / 100.0
+                            price = String.format(java.util.Locale("pt", "BR"), "R$ %.2f", formatted)
+                        }
+                    }, 
+                    label = { Text("Preço") }, 
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                    )
                 )
 
                 OutlinedTextField(
@@ -789,16 +826,23 @@ fun AddServiceDialog(
                     value = observation, 
                     onValueChange = { observation = it }, 
                     label = { Text("Observação/Descrição") }, 
-                    modifier = Modifier.height(70.dp).fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3,
+                    maxLines = 5
                 )
             }
         },
         confirmButton = { 
             Button(
                 onClick = { 
+                    val cleanPrice = price.replace("R$", "")
+                                          .replace(".", "")
+                                          .replace(",", ".")
+                                          .trim()
+                                          .toDoubleOrNull() ?: 0.0
                     onConfirm(
                         name, 
-                        price.replace(",", ".").toDoubleOrNull() ?: 0.0, 
+                        cleanPrice, 
                         duration.toIntOrNull() ?: 30, 
                         category, 
                         observation,

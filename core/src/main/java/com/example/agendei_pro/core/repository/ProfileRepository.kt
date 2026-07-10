@@ -33,21 +33,26 @@ class ProfileRepository {
         }
     }
 
-    suspend fun createProfileForCurrentUser(): UserProfile? {
-        val user = auth.currentUser ?: return null
+    suspend fun createProfileForCurrentUser(): Result<UserProfile> {
+        val user = auth.currentUser ?: return Result.failure(Exception("Usuário não autenticado no Firebase Auth"))
         val profile = UserProfile(
             uid = user.uid,
             name = user.displayName ?: "Usuário",
-            email = user.email ?: "",
+            email = (user.email ?: "").trim().lowercase(),
             photoUrl = user.photoUrl?.toString() ?: ""
         )
-        saveProfile(profile)
-        return profile
+        val saveResult = saveProfile(profile)
+        return if (saveResult.isSuccess) {
+            Result.success(profile)
+        } else {
+            Result.failure(saveResult.exceptionOrNull() ?: Exception("Falha ao salvar perfil no Firestore"))
+        }
     }
 
     suspend fun saveProfile(profile: UserProfile): Result<Unit> {
         return try {
-            firestore.collection("profiles").document(profile.uid).set(profile).await()
+            val normalized = profile.copy(email = profile.email.trim().lowercase())
+            firestore.collection("profiles").document(normalized.uid).set(normalized).await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

@@ -71,6 +71,9 @@ class MainViewModel(
     private var announcementListener: com.google.firebase.firestore.ListenerRegistration? = null
     private var salonAnnouncementListener: com.google.firebase.firestore.ListenerRegistration? = null
 
+    private val _statusMessage = MutableSharedFlow<String>()
+    val statusMessage = _statusMessage.asSharedFlow()
+
     init {
     }
 
@@ -286,9 +289,9 @@ class MainViewModel(
     private val _uploadProgress = MutableStateFlow<Int?>(null)
     val uploadProgress: StateFlow<Int?> = _uploadProgress.asStateFlow()
 
-    fun registerSalon(name: String, address: String, phone: String, segment: String) {
+    fun registerSalon(name: String, address: String, phone: String, segments: List<String>) {
         viewModelScope.launch {
-            if (salonRepository.registerSalon(name, address, phone, segment).isSuccess) checkUserStatus(true)
+            if (salonRepository.registerSalon(name, address, phone, segments).isSuccess) checkUserStatus(true)
         }
     }
 
@@ -301,7 +304,7 @@ class MainViewModel(
         days: List<Int>,
         autoAccept: Boolean,
         logoShape: String,
-        segment: String,
+        segments: List<String>,
         hasLoyalty: Boolean,
         loyaltyRequired: Int,
         loyaltyReward: String,
@@ -316,7 +319,7 @@ class MainViewModel(
         val state = _authState.value as? AuthState.AuthenticatedWithSalon ?: return
         viewModelScope.launch {
             val result = salonRepository.updateSalonSettings(
-                name, opening, closing, breakStart, breakEnd, days, autoAccept, logoShape, segment,
+                name, opening, closing, breakStart, breakEnd, days, autoAccept, logoShape, segments,
                 hasLoyalty, loyaltyRequired, loyaltyReward, autoValidateLoyalty, loyaltyRedemptionDays,
                 slotInterval, isIndividualized, hasWaitingList, minBookingDelayHours, minCancelDelayHours
             )
@@ -330,7 +333,8 @@ class MainViewModel(
                     workingDays = days,
                     autoAccept = autoAccept,
                     logoShape = logoShape,
-                    segment = segment,
+                    segment = segments.firstOrNull() ?: "BARBEARIA",
+                    additionalSegments = if (segments.size > 1) segments.drop(1) else emptyList(),
                     hasLoyaltyProgram = hasLoyalty,
                     loyaltyRequiredServices = loyaltyRequired,
                     loyaltyRewardDescription = loyaltyReward,
@@ -354,6 +358,9 @@ class MainViewModel(
                 salonRepository.removeLogo().onSuccess {
                     val updatedSalon = state.salon.copy(logoUrl = null)
                     _authState.value = state.copy(salon = updatedSalon)
+                    _statusMessage.emit("Logo removido com sucesso!")
+                }.onFailure { error ->
+                    _statusMessage.emit("Erro ao remover logo: ${error.localizedMessage}")
                 }
             }
             return
@@ -366,8 +373,10 @@ class MainViewModel(
                 val updatedSalon = state.salon.copy(logoUrl = url)
                 _authState.value = state.copy(salon = updatedSalon)
                 _uploadProgress.value = null
-            }.onFailure {
+                _statusMessage.emit("Logo atualizado com sucesso!")
+            }.onFailure { error ->
                 _uploadProgress.value = null
+                _statusMessage.emit("Erro no upload do logo: ${error.localizedMessage}")
             }
         }
     }

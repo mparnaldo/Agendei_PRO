@@ -21,12 +21,12 @@ import androidx.compose.foundation.BorderStroke
 
 @Composable
 fun RegisterSalonScreen(
-    onRegisterClick: (String, String, String, String) -> Unit
+    onRegisterClick: (String, String, String, List<String>) -> Unit
 ) {
     var salonName by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
-    var selectedSegment by remember { mutableStateOf("BARBEARIA") }
+    val selectedSegments = remember { mutableStateListOf("BARBEARIA") }
     var isLoading by remember { mutableStateOf(false) }
 
     Column(
@@ -67,10 +67,21 @@ fun RegisterSalonScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        val phoneTransformation = remember { com.example.agendei_pro.ui.utils.PhoneVisualTransformation() }
         OutlinedTextField(
             value = phone,
-            onValueChange = { phone = it },
+            onValueChange = { input ->
+                val cleanInput = input.filter { it.isDigit() }
+                if (cleanInput.length <= 11) {
+                    phone = cleanInput
+                }
+            },
             label = { Text("Telefone / WhatsApp") },
+            placeholder = { Text("(11) 99999-9999") },
+            visualTransformation = phoneTransformation,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+            ),
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             enabled = !isLoading
@@ -79,7 +90,7 @@ fun RegisterSalonScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = "Selecione o Ramo de Atividade",
+            text = "Selecione o Ramo de Atividade (Selecione vários se necessário)",
             style = MaterialTheme.typography.titleSmall,
             modifier = Modifier.align(Alignment.Start).padding(bottom = 12.dp),
             fontWeight = FontWeight.Bold
@@ -90,15 +101,27 @@ fun RegisterSalonScreen(
                 SegmentCard(
                     label = "Barbearia",
                     icon = Icons.Default.ContentCut,
-                    selected = selectedSegment == "BARBEARIA",
-                    onClick = { selectedSegment = "BARBEARIA" },
+                    selected = selectedSegments.contains("BARBEARIA"),
+                    onClick = {
+                        if (selectedSegments.contains("BARBEARIA")) {
+                            if (selectedSegments.size > 1) selectedSegments.remove("BARBEARIA")
+                        } else {
+                            selectedSegments.add("BARBEARIA")
+                        }
+                    },
                     modifier = Modifier.weight(1f)
                 )
                 SegmentCard(
                     label = "Salão / Cabelo",
                     icon = Icons.Default.Face,
-                    selected = selectedSegment == "CABELEIREIRO",
-                    onClick = { selectedSegment = "CABELEIREIRO" },
+                    selected = selectedSegments.contains("CABELEIREIRO"),
+                    onClick = {
+                        if (selectedSegments.contains("CABELEIREIRO")) {
+                            if (selectedSegments.size > 1) selectedSegments.remove("CABELEIREIRO")
+                        } else {
+                            selectedSegments.add("CABELEIREIRO")
+                        }
+                    },
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -106,15 +129,27 @@ fun RegisterSalonScreen(
                 SegmentCard(
                     label = "Manicure",
                     icon = Icons.Default.Brush,
-                    selected = selectedSegment == "MANICURE",
-                    onClick = { selectedSegment = "MANICURE" },
+                    selected = selectedSegments.contains("MANICURE"),
+                    onClick = {
+                        if (selectedSegments.contains("MANICURE")) {
+                            if (selectedSegments.size > 1) selectedSegments.remove("MANICURE")
+                        } else {
+                            selectedSegments.add("MANICURE")
+                        }
+                    },
                     modifier = Modifier.weight(1f)
                 )
                 SegmentCard(
                     label = "Estética",
                     icon = Icons.Default.Spa,
-                    selected = selectedSegment == "ESTETICA",
-                    onClick = { selectedSegment = "ESTETICA" },
+                    selected = selectedSegments.contains("ESTETICA"),
+                    onClick = {
+                        if (selectedSegments.contains("ESTETICA")) {
+                            if (selectedSegments.size > 1) selectedSegments.remove("ESTETICA")
+                        } else {
+                            selectedSegments.add("ESTETICA")
+                        }
+                    },
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -122,8 +157,14 @@ fun RegisterSalonScreen(
                 SegmentCard(
                     label = "Estúdio de Tattoo",
                     icon = Icons.Default.Palette,
-                    selected = selectedSegment == "TATTOO",
-                    onClick = { selectedSegment = "TATTOO" },
+                    selected = selectedSegments.contains("TATTOO"),
+                    onClick = {
+                        if (selectedSegments.contains("TATTOO")) {
+                            if (selectedSegments.size > 1) selectedSegments.remove("TATTOO")
+                        } else {
+                            selectedSegments.add("TATTOO")
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -137,7 +178,7 @@ fun RegisterSalonScreen(
             Button(
                 onClick = {
                     isLoading = true
-                    onRegisterClick(salonName, address, phone, selectedSegment)
+                    onRegisterClick(salonName, address, phone, selectedSegments.toList())
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 enabled = salonName.isNotBlank() && address.isNotBlank()

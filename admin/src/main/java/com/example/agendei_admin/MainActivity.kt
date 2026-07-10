@@ -29,6 +29,9 @@ class MainActivity : ComponentActivity() {
                     if (user == null || user?.email != "mpires.arnaldo@gmail.com") {
                         AdminLoginScreen { user = auth.currentUser }
                     } else {
+                        // Inscrever o administrador no tópico global de chamados de suporte
+                        com.google.firebase.messaging.FirebaseMessaging.getInstance().subscribeToTopic("admin_support")
+
                         NavHost(navController = navController, startDestination = "dashboard") {
                             composable("dashboard") { 
                                 AdminDashboardScreen(
@@ -36,7 +39,8 @@ class MainActivity : ComponentActivity() {
                                     onNavigateToClients = { navController.navigate("clients") },
                                     onNavigateToSettings = { navController.navigate("settings") },
                                     onNavigateToMetrics = { navController.navigate("metrics") },
-                                    onNavigateToBroadcast = { navController.navigate("broadcast") }
+                                    onNavigateToBroadcast = { navController.navigate("broadcast") },
+                                    onNavigateToSupport = { navController.navigate("support") }
                                 ) 
                             }
                             composable("salons") { AdminSalonsScreen(onBack = { navController.popBackStack() }) }
@@ -44,6 +48,16 @@ class MainActivity : ComponentActivity() {
                             composable("settings") { AdminSettingsScreen(onBack = { navController.popBackStack() }) }
                             composable("metrics") { AdminMetricsScreen(onBack = { navController.popBackStack() }) }
                             composable("broadcast") { AdminBroadcastScreen(onBack = { navController.popBackStack() }) }
+                            composable("support") { 
+                                AdminSupportScreen(
+                                    onBack = { navController.popBackStack() },
+                                    onNavigateToChat = { chatId -> navController.navigate("support_chat/$chatId") }
+                                )
+                            }
+                            composable("support_chat/{chatId}") { backStackEntry ->
+                                val chatId = backStackEntry.arguments?.getString("chatId") ?: ""
+                                AdminSupportChatDetailScreen(chatId = chatId, onBack = { navController.popBackStack() })
+                            }
                         }
                     }
                 }
