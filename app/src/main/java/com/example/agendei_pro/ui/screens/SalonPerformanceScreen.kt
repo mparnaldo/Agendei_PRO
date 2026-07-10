@@ -26,6 +26,7 @@ import com.example.agendei_pro.core.model.Professional
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import java.text.NumberFormat
+import java.text.SimpleDateFormat
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.nativeCanvas
@@ -104,6 +105,12 @@ fun SalonPerformanceScreen(onBack: () -> Unit) {
 
     val totalEstimated = realizedRevenue + expectedRevenue
 
+    // 2. Taxa de Cancelamento
+    val totalCount = filteredAppointments.size
+    val cancelledAppointments = filteredAppointments.filter { it.status == "CANCELLED" || it.status == "BLOCKED" }
+    val cancelledCount = cancelledAppointments.size
+    val cancellationRate = if (totalCount > 0) (cancelledCount.toFloat() / totalCount.toFloat()) * 100f else 0f
+
     val ticketMedio = remember(totalEstimated, totalCount, cancelledCount) {
         val completedCount = totalCount - cancelledCount
         if (completedCount > 0) totalEstimated / completedCount else 0.0
@@ -134,12 +141,6 @@ fun SalonPerformanceScreen(onBack: () -> Unit) {
         }
         result
     }
-
-    // 2. Taxa de Cancelamento
-    val totalCount = filteredAppointments.size
-    val cancelledAppointments = filteredAppointments.filter { it.status == "CANCELLED" || it.status == "BLOCKED" }
-    val cancelledCount = cancelledAppointments.size
-    val cancellationRate = if (totalCount > 0) (cancelledCount.toFloat() / totalCount.toFloat()) * 100f else 0f
 
     // 3. Serviços Mais Agendados
     val servicesRanking = remember(filteredAppointments) {

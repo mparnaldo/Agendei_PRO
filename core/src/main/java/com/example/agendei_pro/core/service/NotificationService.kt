@@ -340,7 +340,7 @@ class NotificationService : Service() {
         
         if (avgIntervalDays < 5) return
         
-        val today = Date()
+        val today = java.util.Date()
         val hasFutureBooking = appts.any { 
             it.status == "PENDING" || (it.status == "CONFIRMED" && it.date != null && !it.date.before(today)) 
         }
@@ -351,7 +351,7 @@ class NotificationService : Service() {
         val daysSinceLast = diffFromLastMs / (1000 * 60 * 60 * 24)
         
         val targetTriggerDays = avgIntervalDays - 2
-        if (daysSinceLast >= targetTriggerDays) {
+        if (daysSinceLast.compareTo(targetTriggerDays) >= 0) {
             val prefs = getSharedPreferences("smart_rebooking_prefs", Context.MODE_PRIVATE)
             val lastNotifiedCycleKey = "last_notified_${userId}_${lastApptDate.time}"
             val alreadyNotified = prefs.getBoolean(lastNotifiedCycleKey, false)
