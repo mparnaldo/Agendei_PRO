@@ -10,6 +10,8 @@ import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.tasks.await
 import java.util.Date
 
 data class SupportMessage(
@@ -114,7 +116,8 @@ class SupportViewModel : ViewModel() {
             // Garante gravação segura com SetOptions.merge
             val updateData = mapOf(
                 "lastMessageText" to text,
-                "lastMessageTime" to FieldValue.serverTimestamp()
+                "lastMessageTime" to FieldValue.serverTimestamp(),
+                "unreadCount" to FieldValue.increment(1)
             )
             db.collection("support_chats").document(currentUid).set(updateData, SetOptions.merge())
 
@@ -148,7 +151,8 @@ class SupportViewModel : ViewModel() {
             
             val updateData = mapOf(
                 "lastMessageText" to answer,
-                "lastMessageTime" to FieldValue.serverTimestamp()
+                "lastMessageTime" to FieldValue.serverTimestamp(),
+                "unreadCount" to FieldValue.increment(1)
             )
             db.collection("support_chats").document(currentUid).set(updateData, SetOptions.merge())
             
@@ -180,7 +184,8 @@ class SupportViewModel : ViewModel() {
             val updateData = mapOf(
                 "status" to "PENDING_HUMAN",
                 "lastMessageText" to "Chamado escalado para suporte humano",
-                "lastMessageTime" to FieldValue.serverTimestamp()
+                "lastMessageTime" to FieldValue.serverTimestamp(),
+                "unreadCount" to FieldValue.increment(1)
             )
             db.collection("support_chats").document(currentUid).set(updateData, SetOptions.merge())
         }
@@ -238,9 +243,63 @@ class SupportViewModel : ViewModel() {
             
             val updateData = mapOf(
                 "lastMessageText" to botResponse,
+                "lastMessageTime" to FieldValue.serverTimestamp(),
+                "unreadCount" to FieldValue.increment(1)
+            )
+            db.collection("support_chats").document(currentUid).set(updateData, SetOptions.merge())
+        }
+    }
+
+    fun resolveChat() {
+        val currentUid = userId
+        if (currentUid.isBlank()) return
+        
+        viewModelScope.launch {
+            val updateData = mapOf(
+                "status" to "RESOLVED",
+                "lastMessageText" to "Chamado finalizado pelo usuário",
                 "lastMessageTime" to FieldValue.serverTimestamp()
             )
             db.collection("support_chats").document(currentUid).set(updateData, SetOptions.merge())
+            
+            val systemMsg = mapOf(
+                "sender" to "BOT",
+                "text" to "✓ Atendimento finalizado pelo usuário.",
+                "timestamp" to FieldValue.serverTimestamp()
+            )
+            db.collection("support_chats").document(currentUid).collection("messages").add(systemMsg)
+        }
+    }
+
+    fun startNewChat(isProVersion: Boolean) {
+        val currentUid = userId
+        if (currentUid.isBlank()) return
+
+        viewModelScope.launch {
+            try {
+                val messagesQuery = db.collection("support_chats").document(currentUid)
+                    .collection("messages").get().await()
+                
+                val batch = db.batch()
+                for (doc in messagesQuery.documents) {
+                    batch.delete(doc.reference)
+                }
+                batch.commit().await()
+
+                val resetChat = SupportChat(
+                    userId = currentUid,
+                    userName = userName,
+                    userEmail = userEmail,
+                    userType = if (isProVersion) "SALON" else "CLIENT",
+                    status = "BOT",
+                    lastMessageText = "Novo chamado iniciado",
+                    lastMessageTime = Date()
+                )
+                db.collection("support_chats").document(currentUid).set(resetChat).await()
+                _menuState.value = SupportMenuState.MAIN
+            } catch (e: Exception) {
+                // Erro silencioso
+            }
         }
     }
 }

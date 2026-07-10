@@ -188,9 +188,9 @@ fun ManageTeamScreen(
                 onSearchGooglePhoto = { email, callback ->
                     viewModel.fetchGoogleProfilePhoto(email, callback)
                 },
-                onConfirm = { name, specs, photoUrl, photoUri ->
+                onConfirm = { name, email, specs, photoUrl, photoUri ->
                     if (selectedProfessional == null) {
-                        viewModel.addProfessional(name, specs, photoUrl, photoUri) { success, err ->
+                        viewModel.addProfessional(name, email, specs, photoUrl, photoUri) { success, err ->
                             if (success) {
                                 Toast.makeText(context, "Profissional cadastrado!", Toast.LENGTH_SHORT).show()
                                 showAddEditDialog = false
@@ -201,6 +201,7 @@ fun ManageTeamScreen(
                     } else {
                         val updatedPro = selectedProfessional!!.copy(
                             name = name,
+                            email = email,
                             specialties = specs,
                             photoUrl = photoUrl ?: selectedProfessional!!.photoUrl
                         )
@@ -635,14 +636,30 @@ fun AddEditProfessionalDialog(
     isSaving: Boolean,
     onDismiss: () -> Unit,
     onSearchGooglePhoto: (String, (String?, String?, String?) -> Unit) -> Unit,
-    onConfirm: (String, List<String>, String?, android.net.Uri?) -> Unit
+    onConfirm: (String, String, List<String>, String?, android.net.Uri?) -> Unit
 ) {
     val context = LocalContext.current
     var name by remember { mutableStateOf(professional?.name ?: "") }
-    var email by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf(professional?.email ?: "") }
     var photoUrl by remember { mutableStateOf<String?>(professional?.photoUrl) }
     var selectedPhotoUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var isSearchingGoogle by remember { mutableStateOf(false) }
+
+    // Busca automática de foto quando o e-mail Google for digitado
+    LaunchedEffect(email) {
+        val trimmedEmail = email.trim()
+        if (trimmedEmail.contains("@") && trimmedEmail.contains(".") && trimmedEmail.length > 5) {
+            kotlinx.coroutines.delay(1000) // Debounce de 1s para o término da digitação
+            isSearchingGoogle = true
+            onSearchGooglePhoto(trimmedEmail) { fetchedPhoto, fetchedName, error ->
+                isSearchingGoogle = false
+                if (error == null) {
+                    if (!fetchedPhoto.isNullOrBlank()) photoUrl = fetchedPhoto
+                    if (!fetchedName.isNullOrBlank() && name.isBlank()) name = fetchedName
+                }
+            }
+        }
+    }
 
     val selectedSpecialties = remember { 
         mutableStateListOf<String>().apply {
@@ -821,7 +838,7 @@ fun AddEditProfessionalDialog(
         },
         confirmButton = {
             Button(
-                onClick = { onConfirm(name, selectedSpecialties.toList(), photoUrl, selectedPhotoUri) },
+                onClick = { onConfirm(name, email, selectedSpecialties.toList(), photoUrl, selectedPhotoUri) },
                 enabled = name.isNotBlank() && !isSaving
             ) {
                 if (isSaving) {

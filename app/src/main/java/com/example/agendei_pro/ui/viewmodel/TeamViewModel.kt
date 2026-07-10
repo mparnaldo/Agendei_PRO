@@ -72,6 +72,7 @@ class TeamViewModel(
 
     fun addProfessional(
         name: String,
+        email: String,
         specialties: List<String>,
         photoUrl: String?,
         photoUri: android.net.Uri?,
@@ -88,7 +89,7 @@ class TeamViewModel(
 
         viewModelScope.launch {
             _isSaving.value = true
-            salonRepository.addProfessional(id, name, specialties, photoUrl)
+            salonRepository.addProfessional(id, name, email, specialties, photoUrl)
                 .onSuccess { newPro ->
                     if (photoUri != null && photoUri != android.net.Uri.EMPTY) {
                         salonRepository.uploadProfessionalPhoto(id, newPro.id, photoUri)

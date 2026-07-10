@@ -1,6 +1,7 @@
 package com.example.agendei_admin.ui.screens
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,7 +20,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -30,7 +30,8 @@ data class SupportTicket(
     val userType: String = "", // CLIENT, SALON
     val status: String = "BOT", // BOT, PENDING_HUMAN, RESOLVED
     val lastMessageText: String = "",
-    val lastMessageTime: Date? = null
+    val lastMessageTime: Date? = null,
+    val unreadCount: Int = 0
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -40,30 +41,42 @@ fun AdminSupportScreen(
     onNavigateToChat: (String) -> Unit
 ) {
     val db = FirebaseFirestore.getInstance()
-    var tickets by remember { mutableStateOf<List<SupportTicket>>(emptyList()) }
+    var allTickets by remember { mutableStateOf<List<SupportTicket>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var selectedTabIndex by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(selectedTabIndex) {
+    // 1. Escuta em tempo real TODOS os chamados para cálculo dos badges nas abas
+    LaunchedEffect(Unit) {
         isLoading = true
-        val statusFilter = when (selectedTabIndex) {
-            0 -> "PENDING_HUMAN"
-            1 -> "BOT"
-            else -> "RESOLVED"
-        }
-
         db.collection("support_chats")
-            .whereEqualTo("status", statusFilter)
             .addSnapshotListener { snapshot, _ ->
                 if (snapshot != null) {
-                    val list = snapshot.documents.mapNotNull { it.toObject(SupportTicket::class.java) }
-                    tickets = list.sortedByDescending { it.lastMessageTime }
+                    allTickets = snapshot.documents.mapNotNull { it.toObject(SupportTicket::class.java) }
                 } else {
-                    tickets = emptyList()
+                    allTickets = emptyList()
                 }
                 isLoading = false
             }
     }
+
+    // 2. Filtra e ordena os chamados localmente com base na aba ativa
+    val tickets = remember(allTickets, selectedTabIndex) {
+        val filtered = when (selectedTabIndex) {
+            0 -> allTickets.filter { it.userType == "SALON" && it.status != "RESOLVED" }
+            1 -> allTickets.filter { it.userType == "CLIENT" && it.status != "RESOLVED" }
+            else -> allTickets.filter { it.status == "RESOLVED" }
+        }
+        filtered.sortedByDescending { it.lastMessageTime }
+    }
+
+    // 3. Calcula os contadores para exibir nos rótulos das abas
+    val salonActiveCount = allTickets.count { it.userType == "SALON" && it.status != "RESOLVED" }
+    val salonUnreadCount = allTickets.filter { it.userType == "SALON" && it.status != "RESOLVED" }.sumOf { it.unreadCount }
+
+    val clientActiveCount = allTickets.count { it.userType == "CLIENT" && it.status != "RESOLVED" }
+    val clientUnreadCount = allTickets.filter { it.userType == "CLIENT" && it.status != "RESOLVED" }.sumOf { it.unreadCount }
+
+    val resolvedCount = allTickets.count { it.status == "RESOLVED" }
 
     Scaffold(
         topBar = {
@@ -82,22 +95,62 @@ fun AdminSupportScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Barra de Abas do Suporte
+            // Barra de Abas do Suporte com Badges
             TabRow(selectedTabIndex = selectedTabIndex) {
                 Tab(
                     selected = selectedTabIndex == 0,
                     onClick = { selectedTabIndex = 0 },
-                    text = { Text("Pendentes") }
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Salões ($salonActiveCount)")
+                            if (salonUnreadCount > 0) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .background(MaterialTheme.colorScheme.error, RoundedCornerShape(10.dp))
+                                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                                ) {
+                                    Text(
+                                        text = "$salonUnreadCount ✉",
+                                        color = MaterialTheme.colorScheme.onError,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
                 )
                 Tab(
                     selected = selectedTabIndex == 1,
                     onClick = { selectedTabIndex = 1 },
-                    text = { Text("Fila do Bot") }
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Clientes ($clientActiveCount)")
+                            if (clientUnreadCount > 0) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .background(MaterialTheme.colorScheme.error, RoundedCornerShape(10.dp))
+                                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                                ) {
+                                    Text(
+                                        text = "$clientUnreadCount ✉",
+                                        color = MaterialTheme.colorScheme.onError,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
                 )
                 Tab(
                     selected = selectedTabIndex == 2,
                     onClick = { selectedTabIndex = 2 },
-                    text = { Text("Resolvidos") }
+                    text = {
+                        Text("Resolvidos ($resolvedCount)")
+                    }
                 )
             }
 
@@ -107,14 +160,14 @@ fun AdminSupportScreen(
                 }
             } else if (tickets.isEmpty()) {
                 val emptyTitle = when (selectedTabIndex) {
-                    0 -> "Nenhum chamado pendente!"
-                    1 -> "Nenhum chat em triagem com o Bot."
+                    0 -> "Nenhum chamado de Salão ativo!"
+                    1 -> "Nenhum chamado de Cliente ativo!"
                     else -> "Nenhum histórico de chamado resolvido."
                 }
                 val emptyDesc = when (selectedTabIndex) {
-                    0 -> "Todos os salões e clientes foram atendidos."
-                    1 -> "O assistente virtual está ocioso no momento."
-                    else -> "Os chamados resolvidos aparecerão arquivados aqui."
+                    0 -> "Todos os proprietários de salões estão atendidos e sem dúvidas."
+                    1 -> "Todos os usuários clientes estão com suas dúvidas respondidas."
+                    else -> "Os chamados finalizados e concluídos aparecerão aqui."
                 }
 
                 Box(
@@ -162,6 +215,10 @@ fun AdminSupportScreen(
                         val badgeText = if (isSalon) Color(0xFF2E7D32) else Color(0xFFE65100)
                         val typeLabel = if (isSalon) "SALÃO" else "CLIENTE"
 
+                        val statusLabel = if (ticket.status == "BOT") "🤖 Triagem Bot" else "🙋‍♂️ Suporte Humano"
+                        val statusColor = if (ticket.status == "BOT") MaterialTheme.colorScheme.secondaryContainer else Color(0xFFFFF9C4)
+                        val statusTextColor = if (ticket.status == "BOT") MaterialTheme.colorScheme.onSecondaryContainer else Color(0xFFF57F17)
+
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -175,12 +232,31 @@ fun AdminSupportScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        text = ticket.userName,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 16.sp,
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier.weight(1f)
-                                    )
+                                    ) {
+                                        Text(
+                                            text = ticket.userName,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp
+                                        )
+                                        if (ticket.unreadCount > 0) {
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.error,
+                                                shape = RoundedCornerShape(10.dp)
+                                            ) {
+                                                Text(
+                                                    text = "${ticket.unreadCount} novas",
+                                                    color = MaterialTheme.colorScheme.onError,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 10.sp,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                    }
                                     Surface(
                                         color = badgeColor,
                                         shape = RoundedCornerShape(4.dp),
@@ -201,13 +277,33 @@ fun AdminSupportScreen(
                                     color = MaterialTheme.colorScheme.outline,
                                     modifier = Modifier.padding(top = 2.dp)
                                 )
-                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                // Status Badge (Bot vs Humano)
+                                if (ticket.status != "RESOLVED") {
+                                    Surface(
+                                        color = statusColor,
+                                        shape = RoundedCornerShape(4.dp)
+                                    ) {
+                                        Text(
+                                            text = statusLabel,
+                                            color = statusTextColor,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 10.sp,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                }
+
                                 Text(
                                     text = ticket.lastMessageText,
                                     style = MaterialTheme.typography.bodyMedium,
                                     maxLines = 2,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+
                                 ticket.lastMessageTime?.let {
                                     val dateStr = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(it)
                                     Spacer(modifier = Modifier.height(8.dp))

@@ -48,10 +48,11 @@ class NotificationService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 persistentChannelId,
-                "Serviço de Notificações em Segundo Plano",
-                NotificationManager.IMPORTANCE_LOW
+                "Sincronização em Segundo Plano",
+                NotificationManager.IMPORTANCE_MIN
             ).apply {
-                description = "Mantém a sincronização de agendamentos em tempo real activa"
+                description = "Mantém a sincronização de agendamentos e chamados ativa"
+                setShowBadge(false)
             }
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
@@ -81,6 +82,8 @@ class NotificationService : Service() {
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
 
         if (pendingIntent != null) {
             notificationBuilder.setContentIntent(pendingIntent)
@@ -237,6 +240,29 @@ class NotificationService : Service() {
             activeRegistrations.add(notificationsReg)
             activeRegistrations.add(clientBindingsReg)
         }
+
+        // Ouvir novas mensagens do suporte técnico em tempo real para disparar notificações em background
+        var initialSupportLoad = true
+        val supportReg = firestore.collection("support_chats").document(userId)
+            .collection("messages")
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .limit(1)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                val doc = snapshot.documents.firstOrNull() ?: return@addSnapshotListener
+                val sender = doc.getString("sender") ?: ""
+                val text = doc.getString("text") ?: ""
+
+                if (sender != "USER") {
+                    if (initialSupportLoad) {
+                        initialSupportLoad = false
+                    } else {
+                        val title = if (sender == "ADMIN") "Suporte Agendei 🙋‍♂️" else "Assistente Agendei 🤖"
+                        showNotification(title, text)
+                    }
+                }
+            }
+        activeRegistrations.add(supportReg)
 
         // Shared background listeners for Admin Broadcast notifications
         var initialBroadcastLoad = true

@@ -65,6 +65,13 @@ fun SupportChatScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Voltar")
                     }
+                },
+                actions = {
+                    if (chatInfo != null && chatInfo?.status != "RESOLVED") {
+                        TextButton(onClick = { viewModel.resolveChat() }) {
+                            Text("Finalizar", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             )
         }
@@ -99,7 +106,7 @@ fun SupportChatScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
-                                text = "✓ Este chamado foi marcado como Resolvido. Envie uma nova mensagem para reabrir.",
+                                text = "✓ Atendimento finalizado. Obrigado!",
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(12.dp),
@@ -405,49 +412,86 @@ fun SupportChatScreen(
                 }
             }
 
-            // Barra de Digitação
-            Surface(
-                tonalElevation = 8.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .padding(12.dp)
-                        .navigationBarsPadding()
-                        .imePadding(),
-                    verticalAlignment = Alignment.CenterVertically
+            // Barra de Digitação ou Botão de Novo Chamado
+            if (chatInfo?.status == "RESOLVED") {
+                Surface(
+                    tonalElevation = 8.dp,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    OutlinedTextField(
-                        value = messageText,
-                        onValueChange = { if (it.length <= 250) messageText = it },
-                        placeholder = { Text("Descreva sua dúvida...") },
-                        modifier = Modifier.weight(1f),
-                        maxLines = 3,
-                        supportingText = {
-                            Text(
-                                text = "${messageText.length}/250",
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.End
-                            )
-                        },
-                        trailingIcon = {
-                            IconButton(
-                                onClick = {
-                                    if (messageText.isNotBlank()) {
-                                        viewModel.sendMessage(messageText)
-                                        messageText = ""
-                                    }
-                                },
-                                enabled = messageText.isNotBlank()
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Send,
-                                    contentDescription = "Enviar",
-                                    tint = if (messageText.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                                )
-                            }
+                    Column(
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .navigationBarsPadding()
+                            .imePadding(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Atendimento Concluído ✓",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color(0xFF2E7D32)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "A conversa acima está em modo de leitura. Caso precise de mais ajuda, inicie um novo chamado abaixo.",
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = { viewModel.startNewChat(isProVersion) },
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Iniciar Novo Chamado 🙋‍♂️", fontWeight = FontWeight.Bold)
                         }
-                    )
+                    }
+                }
+            } else {
+                Surface(
+                    tonalElevation = 8.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(12.dp)
+                            .navigationBarsPadding()
+                            .imePadding(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = messageText,
+                            onValueChange = { if (it.length <= 250) messageText = it },
+                            placeholder = { Text("Descreva sua dúvida...") },
+                            modifier = Modifier.weight(1f),
+                            maxLines = 3,
+                            supportingText = {
+                                Text(
+                                    text = "${messageText.length}/250",
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.End
+                                )
+                            },
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = {
+                                        if (messageText.isNotBlank()) {
+                                            viewModel.sendMessage(messageText)
+                                            messageText = ""
+                                        }
+                                    },
+                                    enabled = messageText.isNotBlank()
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Send,
+                                        contentDescription = "Enviar",
+                                        tint = if (messageText.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                                    )
+                                }
+                            }
+                        )
+                    }
                 }
             }
         }

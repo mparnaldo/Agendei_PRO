@@ -277,6 +277,7 @@ class SalonRepository {
     suspend fun addProfessional(
         salonId: String,
         name: String,
+        email: String,
         specialties: List<String>,
         photoUrl: String? = null
     ): Result<com.example.agendei_pro.core.model.Professional> {
@@ -289,6 +290,7 @@ class SalonRepository {
                 id = docRef.id,
                 salonId = salonId,
                 name = name,
+                email = email,
                 specialties = specialties,
                 photoUrl = photoUrl,
                 isActive = true

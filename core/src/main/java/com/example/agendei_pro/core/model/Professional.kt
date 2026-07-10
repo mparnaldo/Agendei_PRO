@@ -6,6 +6,7 @@ data class Professional(
     val id: String = "",
     val salonId: String = "",
     val name: String = "",
+    val email: String = "",
     val specialties: List<String> = emptyList(), // List of serviceIds they can perform. Empty = performs all.
     @get:PropertyName("isActive")
     @field:PropertyName("isActive")

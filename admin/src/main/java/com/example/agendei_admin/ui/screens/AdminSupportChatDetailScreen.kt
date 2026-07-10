@@ -49,12 +49,16 @@ fun AdminSupportChatDetailScreen(
     var replyText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
-    // 1. Escuta as informações do chamado
+    // 1. Escuta as informações do chamado e zera as mensagens não lidas
     LaunchedEffect(chatId) {
         db.collection("support_chats").document(chatId)
             .addSnapshotListener { snapshot, _ ->
                 if (snapshot != null && snapshot.exists()) {
                     chatInfo = snapshot.toObject(SupportTicket::class.java)
+                    val unread = snapshot.getLong("unreadCount") ?: 0L
+                    if (unread > 0L) {
+                        db.collection("support_chats").document(chatId).update("unreadCount", 0)
+                    }
                 }
             }
     }
@@ -95,15 +99,29 @@ fun AdminSupportChatDetailScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = {
-                        db.collection("support_chats").document(chatId)
-                            .update("status", "RESOLVED")
-                            .addOnSuccessListener {
-                                Toast.makeText(context, "Chamado finalizado com sucesso!", Toast.LENGTH_SHORT).show()
-                                onBack()
+                    if (chatInfo != null) {
+                        if (chatInfo?.status != "RESOLVED") {
+                            TextButton(onClick = {
+                                db.collection("support_chats").document(chatId)
+                                    .update("status", "RESOLVED")
+                                    .addOnSuccessListener {
+                                        Toast.makeText(context, "Chamado finalizado com sucesso!", Toast.LENGTH_SHORT).show()
+                                        onBack()
+                                    }
+                            }) {
+                                Text("Finalizar", color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold)
                             }
-                    }) {
-                        Icon(Icons.Default.Done, contentDescription = "Resolver Chamado", tint = Color(0xFF2E7D32))
+                        } else {
+                            TextButton(onClick = {
+                                db.collection("support_chats").document(chatId)
+                                    .update("status", "PENDING_HUMAN")
+                                    .addOnSuccessListener {
+                                        Toast.makeText(context, "Chamado reaberto!", Toast.LENGTH_SHORT).show()
+                                    }
+                            }) {
+                                Text("Reabrir", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             )
@@ -190,61 +208,83 @@ fun AdminSupportChatDetailScreen(
                 }
             }
 
-            // Barra de Digitação para o Admin
-            Surface(
-                tonalElevation = 8.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .padding(12.dp)
-                        .navigationBarsPadding()
-                        .imePadding(),
-                    verticalAlignment = Alignment.CenterVertically
+            // Barra de Digitação ou Mensagem de Resolvido
+            if (chatInfo?.status == "RESOLVED") {
+                Surface(
+                    tonalElevation = 8.dp,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    OutlinedTextField(
-                        value = replyText,
-                        onValueChange = { if (it.length <= 250) replyText = it },
-                        placeholder = { Text("Digite a resposta para o usuário...") },
-                        modifier = Modifier.weight(1f),
-                        maxLines = 3,
-                        supportingText = {
-                            Text(
-                                text = "${replyText.length}/250",
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.End
-                            )
-                        },
-                        trailingIcon = {
-                            IconButton(
-                                onClick = {
-                                    if (replyText.isNotBlank()) {
-                                        val newMsg = mapOf(
-                                            "sender" to "ADMIN",
-                                            "text" to replyText,
-                                            "timestamp" to FieldValue.serverTimestamp()
-                                        )
-                                        db.collection("support_chats").document(chatId)
-                                            .collection("messages").add(newMsg)
-                                        db.collection("support_chats").document(chatId).update(
-                                            mapOf(
-                                                "lastMessageText" to replyText,
-                                                "lastMessageTime" to FieldValue.serverTimestamp()
-                                            )
-                                        )
-                                        replyText = ""
-                                    }
-                                },
-                                enabled = replyText.isNotBlank()
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Send,
-                                    contentDescription = "Enviar",
-                                    tint = if (replyText.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                    Box(
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .navigationBarsPadding()
+                            .imePadding(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Atendimento Concluído ✓ (Modo Leitura)",
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF2E7D32),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            } else {
+                Surface(
+                    tonalElevation = 8.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(12.dp)
+                            .navigationBarsPadding()
+                            .imePadding(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = replyText,
+                            onValueChange = { if (it.length <= 250) replyText = it },
+                            placeholder = { Text("Digite a resposta para o usuário...") },
+                            modifier = Modifier.weight(1f),
+                            maxLines = 3,
+                            supportingText = {
+                                Text(
+                                    text = "${replyText.length}/250",
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.End
                                 )
+                            },
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = {
+                                        if (replyText.isNotBlank()) {
+                                            val newMsg = mapOf(
+                                                "sender" to "ADMIN",
+                                                "text" to replyText,
+                                                "timestamp" to FieldValue.serverTimestamp()
+                                            )
+                                            db.collection("support_chats").document(chatId)
+                                                .collection("messages").add(newMsg)
+                                            db.collection("support_chats").document(chatId).update(
+                                                mapOf(
+                                                    "lastMessageText" to replyText,
+                                                    "lastMessageTime" to FieldValue.serverTimestamp()
+                                                )
+                                            )
+                                            replyText = ""
+                                        }
+                                    },
+                                    enabled = replyText.isNotBlank()
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Send,
+                                        contentDescription = "Enviar",
+                                        tint = if (replyText.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                                    )
+                                }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
