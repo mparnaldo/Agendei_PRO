@@ -42,8 +42,15 @@ Sistema de agendamento online e gerenciamento de fidelidade em tempo real para s
 - **Autoatendimento inteligente:** Menu de ajuda do robô com 8 categorias de navegação rápida cobrindo todas as funcionalidades reais do app.
 - **Transição Humana:** Opção de escalonamento para falar com atendentes humanos. O chamado altera o status de `BOT` para `PENDING_HUMAN` no Firestore.
 - **Painel de Suporte (Retaguarda Admin):**
-  - Monitoramento de chamados pendentes, resolvidos e fila de observação de conversas em andamento com o Bot ("Fila do Bot").
+  - Divisão de chamados em abas direcionadas por remetente ("Salões" e "Clientes") para uma triagem organizada do suporte, além da aba "Resolvidos".
+  - Badges dinâmicos no canto de cada aba exibindo a quantidade de chamados ativos e o total de mensagens não lidas (`unreadCount`), atualizados em tempo real.
+  - Indicadores visuais nos cards dos chamados sobre o status ("Triagem Bot" vs "Suporte Humano") e badge de "novas" mensagens.
+  - Controle de chamados: botões explícitos para "Finalizar" e "Reabrir" chamados para o Admin e usuário, travando a digitação de ambos os lados e liberando a reabertura via novo chamado.
+  - Sincronização automatizada: o contador de mensagens não lidas do chamado é zerado instantaneamente no Firestore quando o Admin abre a tela de conversa.
   - Consulta otimizada por ordenação de memória para dispensar índices compostos do Firebase, tornando o suporte ativo e imediato em qualquer base de dados.
+- **Notificações Silenciosas e Sincronia:**
+  - Redução drástica da invasividade na barra de status superior através do uso de prioridade mínima no canal persistente do Android (`IMPORTANCE_MIN`).
+  - Listener inteligente do suporte em background no `NotificationService` que avisa sobre novas mensagens do suporte mesmo com o app fechado.
 
 ## Segurança e LGPD (Proteção de Dados)
 - **Autenticação Segura:** Dados de login gerenciados inteiramente pelo Google Auth.
@@ -58,4 +65,6 @@ Sistema de agendamento online e gerenciamento de fidelidade em tempo real para s
 - [x] Especialidade universal de equipe ("Todos os Serviços").
 - [x] Chat de suporte com FAQ completo de 8 tópicos e getters dinâmicos de Auth.
 - [x] Painel Admin de retaguarda de suporte sem dependência de índices compostos.
+- [x] Abas direcionadas de suporte, contadores de não lidas e controle de finalização/novo chamado.
+- [x] Busca automática de foto Google pelo e-mail e persistência na equipe.
 - [x] Cópia automatizada de APKs de distribuição e testes.

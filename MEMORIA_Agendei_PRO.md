@@ -40,10 +40,19 @@ O projeto consiste em duas aplicações principais no mesmo repositório, compar
 7. **Suporte Técnico Híbrido com Triagem FAQ**
    - Chat de atendimento inteligente guiado por chips de 8 categorias de ajuda sobre todos os temas do app.
    - Opção de escalonar a conversa para atendentes humanos, caindo instantaneamente na retaguarda do Admin.
+   - Abas direcionadas por remetente ("Salões" e "Clientes") com contadores de quantidade de chamados e mensagens não lidas no canto de cada aba, calculado localmente a partir de um único snapshot listener do banco.
+   - Sincronismo dinâmico: o campo `unreadCount` é incrementado a cada mensagem do usuário e zerado automaticamente quando o Admin abre a conversa correspondente.
+   - Fluxo de ciclo de vida completo: botão explícito "Finalizar" e "Reabrir" chamados para o Admin e usuário, travando o campo de texto quando o chat for marcado como `RESOLVED`, com opção de reabertura manual via botão "Iniciar Novo Chamado".
+
+8. **Busca Automática de Foto Google na Equipe**
+   - Na Dialog de criação e edição de colaborador, a foto de perfil é buscada de forma assíncrona (delay debounce de 1s) direto da conta vinculada ao e-mail Google do profissional conforme ele é digitado.
+   - Adicionada a propriedade `email` no construtor e persistência da classe `Professional` para exibição instantânea do e-mail ao editar o profissional.
 
 ## 🐛 Histórico de Bugs Resolvidos
 
 - **Erro de Chamados no Painel Admin (Julho/2026):** O painel de suporte do administrador não carregava os chamados devido à falta de índices compostos no console Firebase para queries compostas de igualdade + ordenação. **Solução:** Removido o `.orderBy()` direto da query do Firestore e implementada a ordenação de forma local na memória do Kotlin com `sortedByDescending { it.lastMessageTime }`, eliminando qualquer dependência de índices extras.
+- **Notificação Invasiva na Barra do Android:** O Foreground Service exibia uma notificação persistente incomodando o usuário final na bandeja superior. **Solução:** Reduzido o nível do canal de sincronização para prioridade mínima (`IMPORTANCE_MIN`), eliminando alertas e ícones visuais no topo da tela.
+- **Suporte Sem Notificação com App Fechado:** Quando o Admin respondia no chat de suporte com o app do cliente/salão fechado, não aparecia nenhum alerta. **Solução:** Integrado um listener pontual em background no `NotificationService` que escuta novas mensagens na subcoleção do usuário, alertando-o imediatamente com notificações push locais de alta visibilidade.
 - **Perda de Mensagens no Início do Chat (Julho/2026):** As propriedades de credenciais do `SupportViewModel` eram estáticas e ficavam vazias se o FirebaseAuth demorasse a sincronizar no carregamento. **Solução:** Convertidos ID, Nome e E-mail para getters Kotlin dinâmicos e adicionado o salvamento do documento do chat principal via `.set(..., SetOptions.merge())`.
 - **Preço de Serviços sem Máscara:** Preços de serviços eram difíceis de digitar e não mostravam cifrão e decimais. **Solução:** Criada uma máscara monetária dinâmica baseada em centavos que formata em tempo real no padrão `R$ XX,XX`.
 - **Descrição Cortada na Tela de Serviços:** O campo observações na dialog de criação de serviço tinha altura física fixa de `70.dp`. **Solução:** Removido tamanho fixo, adicionado `minLines = 3` e `maxLines = 5` com `fillMaxWidth()`.
@@ -51,8 +60,8 @@ O projeto consiste em duas aplicações principais no mesmo repositório, compar
 - **Mapeamento de Posições no Telefone:** Crash ao cadastrar salão decorrente do offset dinâmico na formatação visual. **Solução:** Refatorado `PhoneVisualTransformation.kt` para criar mapa dinâmico de offsets com base na string digitada em tempo real.
 
 ## 📋 Status Atual e Próximos Passos
-- **APKs Atualizados:** Os novos APKs já foram compilados com os fixes acima e movidos para a pasta `Agendei_Install/` na raiz do projeto.
 - **Git Organizado:** Todos os arquivos novos e modificados foram commitados localmente na branch `main`.
+- **Próximos Passos:** Vinculação automática via deep links e Play Store (planejado para a próxima semana).
 
 **Aviso para o próximo assistente ou futura interação:** 
 *Por favor, leia este documento na íntegra para assumir o contexto exato do repositório antes de realizar novas alterações.*
