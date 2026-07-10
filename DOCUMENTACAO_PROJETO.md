@@ -65,6 +65,9 @@ Sistema de agendamento online e gerenciamento de fidelidade em tempo real para s
 - [x] Especialidade universal de equipe ("Todos os Serviços").
 - [x] Chat de suporte com FAQ completo de 8 tópicos e getters dinâmicos de Auth.
 - [x] Painel Admin de retaguarda de suporte sem dependência de índices compostos.
-- [x] Abas direcionadas de suporte, contadores de não lidas e controle de finalização/novo chamado.
+- [x] Abas direcionadas de suporte e sub-abas secundárias (Fila do Bot e Suporte Humano), contadores de não lidas e controle de finalização/novo chamado.
+- [x] Histórico de chamados finalizados agrupados por data e numerados, com visualização in-app no cliente e salão.
+- [x] Ícone de fone de ouvido (support_agent) nas notificações de suporte.
+- [x] Logo linear do app na TopAppBar da Dashboard do Cliente ao lado do menu.
 - [x] Busca automática de foto Google pelo e-mail e persistência na equipe.
 - [x] Cópia automatizada de APKs de distribuição e testes.
