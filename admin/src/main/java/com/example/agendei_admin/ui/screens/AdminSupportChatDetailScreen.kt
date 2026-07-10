@@ -102,11 +102,62 @@ fun AdminSupportChatDetailScreen(
                     if (chatInfo != null) {
                         if (chatInfo?.status != "RESOLVED") {
                             TextButton(onClick = {
+                                val info = chatInfo ?: return@TextButton
                                 db.collection("support_chats").document(chatId)
-                                    .update("status", "RESOLVED")
-                                    .addOnSuccessListener {
-                                        Toast.makeText(context, "Chamado finalizado com sucesso!", Toast.LENGTH_SHORT).show()
-                                        onBack()
+                                    .collection("messages").orderBy("timestamp").get()
+                                    .addOnSuccessListener { activeMessages ->
+                                        val todayStr = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(Date())
+                                        
+                                        db.collection("support_history")
+                                            .whereEqualTo("userId", chatId)
+                                            .get()
+                                            .addOnSuccessListener { historyQuery ->
+                                                val countToday = historyQuery.documents.count { doc ->
+                                                    doc.getString("resolvedDateStr") == todayStr
+                                                }
+                                                val ticketNum = countToday + 1
+                                                val ticketName = "Chamado $todayStr - $ticketNum"
+                                                val historyId = "${chatId}_${System.currentTimeMillis()}"
+                                                
+                                                val historyDoc = mapOf(
+                                                    "userId" to historyId,
+                                                    "userName" to ticketName,
+                                                    "userEmail" to info.userEmail,
+                                                    "userType" to info.userType,
+                                                    "status" to "RESOLVED",
+                                                    "lastMessageText" to (activeMessages.documents.lastOrNull()?.getString("text") ?: "Chamado finalizado pelo suporte"),
+                                                    "lastMessageTime" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                                    "resolvedDateStr" to todayStr
+                                                )
+                                                
+                                                db.collection("support_history").document(historyId).set(historyDoc)
+                                                    .addOnSuccessListener {
+                                                        val batch = db.batch()
+                                                        for (doc in activeMessages.documents) {
+                                                            val newMsgRef = db.collection("support_history").document(historyId)
+                                                                .collection("messages").document(doc.id)
+                                                            batch.set(newMsgRef, doc.data)
+                                                        }
+                                                        batch.commit().addOnSuccessListener {
+                                                            db.collection("support_chats").document(chatId)
+                                                                .update(mapOf(
+                                                                    "status" to "RESOLVED",
+                                                                    "lastMessageText" to "Chamado finalizado pelo suporte",
+                                                                    "lastMessageTime" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                                                ))
+                                                                .addOnSuccessListener {
+                                                                    val systemMsg = mapOf(
+                                                                        "sender" to "BOT",
+                                                                        "text" to "✓ Atendimento finalizado pelo suporte.",
+                                                                        "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                                                    )
+                                                                    db.collection("support_chats").document(chatId).collection("messages").add(systemMsg)
+                                                                    Toast.makeText(context, "Chamado finalizado!", Toast.LENGTH_SHORT).show()
+                                                                    onBack()
+                                                                }
+                                                        }
+                                                    }
+                                            }
                                     }
                             }) {
                                 Text("Finalizar", color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold)

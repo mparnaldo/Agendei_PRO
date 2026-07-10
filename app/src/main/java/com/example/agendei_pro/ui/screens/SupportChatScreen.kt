@@ -3,6 +3,8 @@ package com.example.agendei_pro.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,6 +14,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.SupportAgent
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -41,6 +45,10 @@ fun SupportChatScreen(
     var messageText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
+    var showHistoryDialog by remember { mutableStateOf(false) }
+    var selectedHistoryId by remember { mutableStateOf<String?>(null) }
+    var selectedHistoryTitle by remember { mutableStateOf("") }
+
     LaunchedEffect(Unit) {
         viewModel.initChat(isProVersion)
     }
@@ -67,9 +75,31 @@ fun SupportChatScreen(
                     }
                 },
                 actions = {
-                    if (chatInfo != null && chatInfo?.status != "RESOLVED") {
-                        TextButton(onClick = { viewModel.resolveChat() }) {
-                            Text("Finalizar", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        IconButton(onClick = {
+                            viewModel.loadHistoryList()
+                            showHistoryDialog = true
+                        }) {
+                            Icon(Icons.Default.History, contentDescription = "Histórico de Chamados")
+                        }
+                        if (chatInfo != null && chatInfo?.status != "RESOLVED") {
+                            Button(
+                                onClick = { viewModel.resolveChat(isProVersion) },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.height(36.dp).padding(end = 4.dp)
+                            ) {
+                                Text(
+                                    text = "Finalizar",
+                                    color = MaterialTheme.colorScheme.onError,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }
@@ -495,5 +525,104 @@ fun SupportChatScreen(
                 }
             }
         }
+    }
+
+    // Dialog de Histórico de Chamados
+    if (showHistoryDialog) {
+        val historyList by viewModel.historyList.collectAsState()
+        AlertDialog(
+            onDismissRequest = { showHistoryDialog = false },
+            title = { Text("Histórico de Chamados 🕒", fontWeight = FontWeight.Bold) },
+            text = {
+                if (historyList.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                        Text("Nenhum chamado arquivado.", color = MaterialTheme.colorScheme.outline)
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(historyList) { item ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    selectedHistoryId = item.userId
+                                    selectedHistoryTitle = item.userName
+                                    viewModel.loadHistoryMessages(item.userId)
+                                },
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(item.userName, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                        Text(item.lastMessageText, style = MaterialTheme.typography.bodySmall, maxLines = 1, color = MaterialTheme.colorScheme.outline)
+                                    }
+                                    Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.outline)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showHistoryDialog = false }) {
+                    Text("Fechar")
+                }
+            }
+        )
+    }
+
+    // Dialog de Visualização das Mensagens Históricas
+    if (selectedHistoryId != null) {
+        val historyMessages by viewModel.historyMessages.collectAsState()
+        AlertDialog(
+            onDismissRequest = { selectedHistoryId = null },
+            title = { Text(selectedHistoryTitle, fontWeight = FontWeight.Bold) },
+            text = {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(historyMessages) { msg ->
+                        val isMe = msg.sender == "USER"
+                        val alignment = if (isMe) Alignment.End else Alignment.Start
+                        val bgColor = if (isMe) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
+                        val textColor = if (isMe) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
+                        
+                        Column(
+                            horizontalAlignment = alignment,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Surface(
+                                color = bgColor,
+                                shape = RoundedCornerShape(
+                                    topStart = 12.dp,
+                                    topEnd = 12.dp,
+                                    bottomStart = if (isMe) 12.dp else 0.dp,
+                                    bottomEnd = if (isMe) 0.dp else 12.dp
+                                )
+                            ) {
+                                Text(
+                                    text = msg.text,
+                                    modifier = Modifier.padding(10.dp),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = textColor
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { selectedHistoryId = null }) {
+                    Text("Voltar")
+                }
+            }
+        )
     }
 }

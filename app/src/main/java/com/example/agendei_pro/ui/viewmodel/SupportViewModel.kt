@@ -28,7 +28,9 @@ data class SupportChat(
     val userType: String = "", // CLIENT, SALON
     val status: String = "BOT", // BOT, PENDING_HUMAN, RESOLVED
     val lastMessageText: String = "",
-    val lastMessageTime: Date? = null
+    val lastMessageTime: Date? = null,
+    val unreadCount: Int = 0,
+    val resolvedDateStr: String = ""
 )
 
 enum class SupportMenuState {
@@ -44,6 +46,12 @@ class SupportViewModel : ViewModel() {
 
     private val _chatInfo = MutableStateFlow<SupportChat?>(null)
     val chatInfo: StateFlow<SupportChat?> = _chatInfo
+
+    private val _historyMessages = MutableStateFlow<List<SupportMessage>>(emptyList())
+    val historyMessages: StateFlow<List<SupportMessage>> = _historyMessages
+
+    private val _historyList = MutableStateFlow<List<SupportChat>>(emptyList())
+    val historyList: StateFlow<List<SupportChat>> = _historyList
 
     private val _menuState = MutableStateFlow(SupportMenuState.MAIN)
     val menuState: StateFlow<SupportMenuState> = _menuState
@@ -250,25 +258,102 @@ class SupportViewModel : ViewModel() {
         }
     }
 
-    fun resolveChat() {
+    fun resolveChat(isProVersion: Boolean) {
         val currentUid = userId
         if (currentUid.isBlank()) return
         
         viewModelScope.launch {
-            val updateData = mapOf(
-                "status" to "RESOLVED",
-                "lastMessageText" to "Chamado finalizado pelo usuário",
-                "lastMessageTime" to FieldValue.serverTimestamp()
-            )
-            db.collection("support_chats").document(currentUid).set(updateData, SetOptions.merge())
-            
-            val systemMsg = mapOf(
-                "sender" to "BOT",
-                "text" to "✓ Atendimento finalizado pelo usuário.",
-                "timestamp" to FieldValue.serverTimestamp()
-            )
-            db.collection("support_chats").document(currentUid).collection("messages").add(systemMsg)
+            try {
+                // 1. Lê todas as mensagens ativas para copiar para o histórico
+                val activeMessages = db.collection("support_chats").document(currentUid)
+                    .collection("messages").orderBy("timestamp", Query.Direction.ASCENDING).get().await()
+                
+                if (!activeMessages.isEmpty) {
+                    // 2. Calcula a data de hoje formatada
+                    val todayStr = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(Date())
+                    
+                    // 3. Conta quantos chamados já existem na data de hoje
+                    val historyQuery = db.collection("support_history")
+                        .whereEqualTo("userId", currentUid)
+                        .get()
+                        .await()
+                    
+                    val countToday = historyQuery.documents.count { doc ->
+                        val resolvedDateStr = doc.getString("resolvedDateStr") ?: ""
+                        resolvedDateStr == todayStr
+                    }
+                    val ticketNum = countToday + 1
+                    val ticketName = "Chamado $todayStr - $ticketNum"
+                    
+                    // 4. Cria o documento histórico com ID único
+                    val historyId = "${currentUid}_${System.currentTimeMillis()}"
+                    val historyDoc = SupportChat(
+                        userId = historyId, // Usamos o ID único do histórico no campo userId do documento histórico
+                        userName = ticketName,
+                        userEmail = userEmail,
+                        userType = if (isProVersion) "SALON" else "CLIENT",
+                        status = "RESOLVED",
+                        lastMessageText = activeMessages.documents.lastOrNull()?.getString("text") ?: "Chamado finalizado",
+                        lastMessageTime = Date(),
+                        resolvedDateStr = todayStr
+                    )
+                    
+                    db.collection("support_history").document(historyId).set(historyDoc).await()
+                    
+                    // 5. Copia as mensagens ativas para o histórico
+                    val batch = db.batch()
+                    for (doc in activeMessages.documents) {
+                        val newMsgRef = db.collection("support_history").document(historyId)
+                            .collection("messages").document(doc.id)
+                        batch.set(newMsgRef, doc.data ?: emptyMap<String, Any>())
+                    }
+                    batch.commit().await()
+                }
+
+                // 6. Atualiza o status do chat ativo para RESOLVED no support_chats principal
+                val updateData = mapOf(
+                    "status" to "RESOLVED",
+                    "lastMessageText" to "Chamado finalizado pelo usuário",
+                    "lastMessageTime" to FieldValue.serverTimestamp()
+                )
+                db.collection("support_chats").document(currentUid).set(updateData, SetOptions.merge()).await()
+                
+                val systemMsg = mapOf(
+                    "sender" to "BOT",
+                    "text" to "✓ Atendimento finalizado pelo usuário.",
+                    "timestamp" to FieldValue.serverTimestamp()
+                )
+                db.collection("support_chats").document(currentUid).collection("messages").add(systemMsg)
+            } catch (e: Exception) {
+                // Erro silencioso
+            }
         }
+    }
+
+    fun loadHistoryList() {
+        val currentUid = auth.currentUser?.uid ?: return
+        db.collection("support_history")
+            .whereEqualTo("userEmail", auth.currentUser?.email) // Filtro robusto por e-mail para cobrir re-logins
+            .get()
+            .addOnSuccessListener { snapshot ->
+                val list = snapshot.documents.mapNotNull { it.toObject(SupportChat::class.java) }
+                _historyList.value = list.sortedByDescending { it.lastMessageTime }
+            }
+    }
+
+    fun loadHistoryMessages(historyId: String) {
+        db.collection("support_history").document(historyId)
+            .collection("messages")
+            .orderBy("timestamp", Query.Direction.ASCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (snapshot != null) {
+                    val list = snapshot.documents.mapNotNull { doc ->
+                        val msg = doc.toObject(SupportMessage::class.java)
+                        msg?.copy(id = doc.id)
+                    }
+                    _historyMessages.value = list
+                }
+            }
     }
 
     fun startNewChat(isProVersion: Boolean) {

@@ -15,6 +15,7 @@ import com.example.agendei_pro.core.model.Appointment
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Query
 
 class NotificationService : Service() {
 
@@ -258,7 +259,7 @@ class NotificationService : Service() {
                         initialSupportLoad = false
                     } else {
                         val title = if (sender == "ADMIN") "Suporte Agendei 🙋‍♂️" else "Assistente Agendei 🤖"
-                        showNotification(title, text)
+                        showNotification(title, text, com.example.agendei_pro.core.R.drawable.ic_support_agent)
                     }
                 }
             }
@@ -314,9 +315,12 @@ class NotificationService : Service() {
             }
     }
 
-    private fun showNotification(title: String, message: String) {
-        // Delega para o utilitário compartilhado que obtém a MainActivity dinamicamente
-        showLocalNotification(this, title, message)
+    private fun showNotification(title: String, message: String, iconResId: Int? = null) {
+        if (iconResId != null) {
+            showLocalNotification(this, title, message, iconResId)
+        } else {
+            showLocalNotification(this, title, message)
+        }
     }
 
     override fun onDestroy() {

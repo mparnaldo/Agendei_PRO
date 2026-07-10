@@ -44,8 +44,14 @@ fun AdminSupportScreen(
     var allTickets by remember { mutableStateOf<List<SupportTicket>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var selectedTabIndex by remember { mutableIntStateOf(0) }
+    var selectedSubTabIndex by remember { mutableIntStateOf(0) }
 
-    // 1. Escuta em tempo real TODOS os chamados para cálculo dos badges nas abas
+    // Ao alternar a aba principal, reseta a sub-aba para a primeira opção
+    LaunchedEffect(selectedTabIndex) {
+        selectedSubTabIndex = 0
+    }
+
+    // 1. Escuta em tempo real TODOS os chamados
     LaunchedEffect(Unit) {
         isLoading = true
         db.collection("support_chats")
@@ -59,17 +65,37 @@ fun AdminSupportScreen(
             }
     }
 
-    // 2. Filtra e ordena os chamados localmente com base na aba ativa
-    val tickets = remember(allTickets, selectedTabIndex) {
+    // 2. Filtra e ordena os chamados localmente com base na aba ativa e na sub-aba
+    val tickets = remember(allTickets, selectedTabIndex, selectedSubTabIndex) {
         val filtered = when (selectedTabIndex) {
-            0 -> allTickets.filter { it.userType == "SALON" && it.status != "RESOLVED" }
-            1 -> allTickets.filter { it.userType == "CLIENT" && it.status != "RESOLVED" }
-            else -> allTickets.filter { it.status == "RESOLVED" }
+            0 -> { // Salões
+                val type = "SALON"
+                if (selectedSubTabIndex == 0) {
+                    allTickets.filter { it.userType == type && it.status == "BOT" }
+                } else {
+                    allTickets.filter { it.userType == type && it.status == "PENDING_HUMAN" }
+                }
+            }
+            1 -> { // Clientes
+                val type = "CLIENT"
+                if (selectedSubTabIndex == 0) {
+                    allTickets.filter { it.userType == type && it.status == "BOT" }
+                } else {
+                    allTickets.filter { it.userType == type && it.status == "PENDING_HUMAN" }
+                }
+            }
+            else -> { // Resolvidos
+                if (selectedSubTabIndex == 0) {
+                    allTickets.filter { it.userType == "SALON" && it.status == "RESOLVED" }
+                } else {
+                    allTickets.filter { it.userType == "CLIENT" && it.status == "RESOLVED" }
+                }
+            }
         }
         filtered.sortedByDescending { it.lastMessageTime }
     }
 
-    // 3. Calcula os contadores para exibir nos rótulos das abas
+    // 3. Calcula os contadores para exibir nas abas principais
     val salonActiveCount = allTickets.count { it.userType == "SALON" && it.status != "RESOLVED" }
     val salonUnreadCount = allTickets.filter { it.userType == "SALON" && it.status != "RESOLVED" }.sumOf { it.unreadCount }
 
@@ -77,6 +103,10 @@ fun AdminSupportScreen(
     val clientUnreadCount = allTickets.filter { it.userType == "CLIENT" && it.status != "RESOLVED" }.sumOf { it.unreadCount }
 
     val resolvedCount = allTickets.count { it.status == "RESOLVED" }
+
+    // Contadores para as sub-abas dos Resolvidos
+    val resolvedSalonCount = allTickets.count { it.userType == "SALON" && it.status == "RESOLVED" }
+    val resolvedClientCount = allTickets.count { it.userType == "CLIENT" && it.status == "RESOLVED" }
 
     Scaffold(
         topBar = {
@@ -95,7 +125,7 @@ fun AdminSupportScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Barra de Abas do Suporte com Badges
+            // Barra de Abas do Suporte Principal
             TabRow(selectedTabIndex = selectedTabIndex) {
                 Tab(
                     selected = selectedTabIndex == 0,
@@ -111,7 +141,7 @@ fun AdminSupportScreen(
                                         .padding(horizontal = 5.dp, vertical = 1.dp)
                                 ) {
                                     Text(
-                                        text = "$salonUnreadCount ✉",
+                                        text = "$salonUnreadCount",
                                         color = MaterialTheme.colorScheme.onError,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold
@@ -135,7 +165,7 @@ fun AdminSupportScreen(
                                         .padding(horizontal = 5.dp, vertical = 1.dp)
                                 ) {
                                     Text(
-                                        text = "$clientUnreadCount ✉",
+                                        text = "$clientUnreadCount",
                                         color = MaterialTheme.colorScheme.onError,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold
@@ -154,20 +184,86 @@ fun AdminSupportScreen(
                 )
             }
 
+            // Barra de Sub-abas Secundárias
+            TabRow(
+                selectedTabIndex = selectedSubTabIndex,
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            ) {
+                if (selectedTabIndex == 2) {
+                    Tab(
+                        selected = selectedSubTabIndex == 0,
+                        onClick = { selectedSubTabIndex = 0 },
+                        text = { Text("Salões ($resolvedSalonCount)", fontSize = 13.sp) }
+                    )
+                    Tab(
+                        selected = selectedSubTabIndex == 1,
+                        onClick = { selectedSubTabIndex = 1 },
+                        text = { Text("Clientes ($resolvedClientCount)", fontSize = 13.sp) }
+                    )
+                } else {
+                    val userType = if (selectedTabIndex == 0) "SALON" else "CLIENT"
+                    val botCount = allTickets.count { it.userType == userType && it.status == "BOT" }
+                    val humanCount = allTickets.count { it.userType == userType && it.status == "PENDING_HUMAN" }
+                    
+                    val botUnread = allTickets.filter { it.userType == userType && it.status == "BOT" }.sumOf { it.unreadCount }
+                    val humanUnread = allTickets.filter { it.userType == userType && it.status == "PENDING_HUMAN" }.sumOf { it.unreadCount }
+
+                    Tab(
+                        selected = selectedSubTabIndex == 0,
+                        onClick = { selectedSubTabIndex = 0 },
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Fila do Bot ($botCount)", fontSize = 13.sp)
+                                if (botUnread > 0) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .background(MaterialTheme.colorScheme.error, RoundedCornerShape(10.dp))
+                                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                                    ) {
+                                        Text(text = "$botUnread", color = MaterialTheme.colorScheme.onError, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    )
+                    Tab(
+                        selected = selectedSubTabIndex == 1,
+                        onClick = { selectedSubTabIndex = 1 },
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Suporte Humano ($humanCount)", fontSize = 13.sp)
+                                if (humanUnread > 0) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .background(MaterialTheme.colorScheme.error, RoundedCornerShape(10.dp))
+                                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                                    ) {
+                                        Text(text = "$humanUnread", color = MaterialTheme.colorScheme.onError, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    )
+                }
+            }
+
             if (isLoading) {
                 Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
             } else if (tickets.isEmpty()) {
                 val emptyTitle = when (selectedTabIndex) {
-                    0 -> "Nenhum chamado de Salão ativo!"
-                    1 -> "Nenhum chamado de Cliente ativo!"
-                    else -> "Nenhum histórico de chamado resolvido."
+                    0 -> if (selectedSubTabIndex == 0) "Nenhum salão em Fila do Bot!" else "Nenhum chamado de Salão pendente!"
+                    1 -> if (selectedSubTabIndex == 0) "Nenhum cliente em Fila do Bot!" else "Nenhum chamado de Cliente pendente!"
+                    else -> if (selectedSubTabIndex == 0) "Nenhum chamado de Salão resolvido." else "Nenhum chamado de Cliente resolvido."
                 }
                 val emptyDesc = when (selectedTabIndex) {
-                    0 -> "Todos os proprietários de salões estão atendidos e sem dúvidas."
-                    1 -> "Todos os usuários clientes estão com suas dúvidas respondidas."
-                    else -> "Os chamados finalizados e concluídos aparecerão aqui."
+                    0 -> if (selectedSubTabIndex == 0) "Não há salões interagindo com o Bot no momento." else "Todos os salões ativos foram respondidos."
+                    1 -> if (selectedSubTabIndex == 0) "Não há clientes interagindo com o Bot no momento." else "Todos os clientes ativos foram respondidos."
+                    else -> "Os chamados resolvidos arquivados aparecerão aqui."
                 }
 
                 Box(

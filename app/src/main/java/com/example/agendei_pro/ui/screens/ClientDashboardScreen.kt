@@ -225,7 +225,24 @@ fun ClientDashboardScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Agendei") },
+                title = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            painter = androidx.compose.ui.res.painterResource(id = com.example.agendei_pro.core.R.drawable.ic_logo_linear),
+                            contentDescription = "Agendei Logo",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = "Agendei",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onMenuClick) {
                         Icon(Icons.Default.Menu, "Menu")

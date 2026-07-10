@@ -14,7 +14,7 @@ import androidx.core.app.NotificationCompat
  * Função utilitária para exibir notificações locais sem depender de referências estáticas ou 
  * acopladas de atividades do módulo principal (evitando dependências circulares com a MainActivity).
  */
-fun showLocalNotification(context: Context, title: String, message: String) {
+fun showLocalNotification(context: Context, title: String, message: String, iconResId: Int = android.R.drawable.ic_dialog_info) {
     val channelId = "agendamentos_channel"
     val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
@@ -48,7 +48,7 @@ fun showLocalNotification(context: Context, title: String, message: String) {
     }
 
     val notificationBuilder = NotificationCompat.Builder(context, channelId)
-        .setSmallIcon(android.R.drawable.ic_dialog_info)
+        .setSmallIcon(iconResId)
         .setContentTitle(title)
         .setContentText(message)
         .setAutoCancel(true)
