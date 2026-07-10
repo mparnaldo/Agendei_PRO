@@ -136,7 +136,10 @@ fun AdminSupportChatDetailScreen(
                                                         for (doc in activeMessages.documents) {
                                                             val newMsgRef = db.collection("support_history").document(historyId)
                                                                 .collection("messages").document(doc.id)
-                                                            batch.set(newMsgRef, doc.data)
+                                                            val data = doc.data
+                                                            if (data != null) {
+                                                                batch.set(newMsgRef, data)
+                                                            }
                                                         }
                                                         batch.commit().addOnSuccessListener {
                                                             db.collection("support_chats").document(chatId)
