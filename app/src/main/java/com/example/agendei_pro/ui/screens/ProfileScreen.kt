@@ -30,9 +30,15 @@ fun ProfileScreen(
     onThemeClick: () -> Unit,
     onNavigateBack: () -> Unit
 ) {
+    val cleanCurrentPhone = remember(currentPhoneNumber) { currentPhoneNumber.filter { it.isDigit() } }
     var name by remember { mutableStateOf(currentName) }
-    var phoneNumber by remember { mutableStateOf(currentPhoneNumber) }
+    var phoneNumber by remember { mutableStateOf(cleanCurrentPhone) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(currentName, currentPhoneNumber) {
+        name = currentName
+        phoneNumber = currentPhoneNumber.filter { it.isDigit() }
+    }
 
     Scaffold(
         topBar = {
@@ -127,9 +133,9 @@ fun ProfileScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Button(
-                onClick = { onSaveProfile(name, phoneNumber) },
+                onClick = { onSaveProfile(name.trim(), phoneNumber.trim()) },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
-                enabled = (name.isNotBlank() && name != currentName) || (phoneNumber != currentPhoneNumber)
+                enabled = (name.isNotBlank() && name.trim() != currentName.trim()) || (phoneNumber != cleanCurrentPhone)
             ) { Text("Salvar Alterações") }
 
             Spacer(modifier = Modifier.height(24.dp))

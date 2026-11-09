@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -40,6 +41,7 @@ import androidx.compose.material.icons.filled.EventNote
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Phone
 import android.content.Intent
 import android.provider.CalendarContract
 
@@ -153,6 +155,17 @@ fun SchedulingScreen(
             2 -> step = 1
             else -> onNavigateBack()
         }
+    }
+    val isBlocked by viewModel.isBlocked.collectAsState()
+    val salon by viewModel.salon.collectAsState()
+
+    if (isBlocked) {
+        BlockedUserScreen(
+            salonName = salon?.name ?: "o estabelecimento",
+            salonPhone = salon?.phoneNumber ?: "",
+            onNavigateBack = onNavigateBack
+        )
+        return
     }
 
     Scaffold(
@@ -549,7 +562,12 @@ fun SchedulingScreen(
                     )
                     OutlinedTextField(
                         value = tempPhone,
-                        onValueChange = { tempPhone = it },
+                        onValueChange = { input ->
+                            val digitsOnly = input.filter { it.isDigit() }
+                            if (digitsOnly.length <= 11) {
+                                tempPhone = formatPhoneNumber(digitsOnly)
+                            }
+                        },
                         label = { Text("WhatsApp (com DDD)") },
                         placeholder = { Text("(11) 99999-9999") },
                         modifier = Modifier.fillMaxWidth(),
@@ -643,7 +661,12 @@ fun SchedulingScreen(
                     )
                     OutlinedTextField(
                         value = tempPhone,
-                        onValueChange = { tempPhone = it },
+                        onValueChange = { input ->
+                            val digitsOnly = input.filter { it.isDigit() }
+                            if (digitsOnly.length <= 11) {
+                                tempPhone = formatPhoneNumber(digitsOnly)
+                            }
+                        },
                         label = { Text("WhatsApp (com DDD)") },
                         placeholder = { Text("(11) 99999-9999") },
                         modifier = Modifier.fillMaxWidth(),
@@ -919,5 +942,107 @@ fun SuccessScreen(
         ) {
             Text("Voltar para o Início")
         }
+    }
+}
+
+@Composable
+fun BlockedUserScreen(
+    salonName: String,
+    salonPhone: String,
+    onNavigateBack: () -> Unit
+) {
+    val context = LocalContext.current
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "🔒",
+                fontSize = 64.sp,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+            
+            Text(
+                text = "Agendamento Suspenso",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.error,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            
+            Text(
+                text = "Seu cadastro está temporariamente bloqueado para realizar novos agendamentos online em $salonName.",
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(bottom = 24.dp)
+            )
+            
+            if (salonPhone.isNotBlank()) {
+                Text(
+                    text = "Para agendar, por favor entre em contato direto com o estabelecimento pelo telefone:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                
+                Button(
+                    onClick = {
+                        try {
+                            val intent = Intent(Intent.ACTION_DIAL).apply {
+                                data = android.net.Uri.parse("tel:${salonPhone.filter { it.isDigit() }}")
+                            }
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Não foi possível abrir o discador", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 32.dp, vertical = 8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Phone,
+                        contentDescription = "Ligar"
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Ligar para $salonPhone", fontWeight = FontWeight.Bold)
+                }
+            } else {
+                Text(
+                    text = "Por favor, entre em contato com o salão por telefone para regularizar o seu agendamento.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(32.dp))
+            
+            TextButton(onClick = onNavigateBack) {
+                Text("Voltar", fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+fun formatPhoneNumber(digits: String): String {
+    return when {
+        digits.isEmpty() -> ""
+        digits.length <= 2 -> "($digits"
+        digits.length <= 6 -> "(${digits.substring(0, 2)}) ${digits.substring(2)}"
+        digits.length <= 10 -> "(${digits.substring(0, 2)}) ${digits.substring(2, 6)}-${digits.substring(6)}"
+        else -> "(${digits.substring(0, 2)}) ${digits.substring(2, 7)}-${digits.substring(7)}"
     }
 }

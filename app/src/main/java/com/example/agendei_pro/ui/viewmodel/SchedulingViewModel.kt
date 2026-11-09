@@ -55,8 +55,16 @@ class SchedulingViewModel(
     private val _isSuccess = MutableStateFlow(false)
     val isSuccess = _isSuccess.asStateFlow()
 
+    private val _isBlocked = MutableStateFlow(false)
+    val isBlocked = _isBlocked.asStateFlow()
+
     fun loadServices(salonId: String) {
+        val user = auth.currentUser
         viewModelScope.launch {
+            if (user != null) {
+                val userBinding = salonRepository.getUserBinding(salonId, user.uid)
+                _isBlocked.value = userBinding?.isBlocked == true
+            }
             val salonObj = salonRepository.getSalonById(salonId)
             _salon.value = salonObj
             serviceRepository.getServices(salonId).collect { _services.value = it }

@@ -84,6 +84,7 @@ class MainActivity : ComponentActivity() {
                 val pendingSalonAppointments by viewModel.pendingSalonAppointments.collectAsState()
                 val globalAnnouncement by viewModel.globalAnnouncement.collectAsState()
                 val salonAnnouncement by viewModel.salonAnnouncement.collectAsState()
+                val isCurrentClientBlocked by viewModel.isCurrentClientBlocked.collectAsState()
                 val navController = rememberNavController()
                 val scope = rememberCoroutineScope()
                 val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -147,11 +148,21 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
                                 } else {
-                                    Text(
-                                        text = "Menu Agendei",
-                                        modifier = Modifier.padding(16.dp),
-                                        style = MaterialTheme.typography.titleLarge
-                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 24.dp, horizontal = 16.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Image(
+                                            painter = painterResource(id = R.drawable.agendeimenu),
+                                            contentDescription = "Agendei Logo",
+                                            modifier = Modifier
+                                                .height(55.dp)
+                                                .fillMaxWidth(),
+                                            contentScale = ContentScale.Fit
+                                        )
+                                    }
                                 }
                                 NavigationDrawerItem(
                                      label = { Text("Meu Perfil") },
@@ -310,7 +321,7 @@ class MainActivity : ComponentActivity() {
                                                 loyaltyState = state.loyaltyState,
                                                 globalAnnouncement = globalAnnouncement,
                                                 salonAnnouncement = salonAnnouncement,
-                                                isBlocked = binding.isBlocked,
+                                                isBlocked = isCurrentClientBlocked,
                                                 favoriteProfessionalId = binding.favoriteProfessionalId,
                                                 favoriteProfessionalName = binding.favoriteProfessionalName,
                                                 favoriteProfessionalPhotoUrl = binding.favoriteProfessionalPhotoUrl,
@@ -450,7 +461,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                                 composable("client_appointments") {
-                                    ClientAppointmentsScreen { navController.popBackStack() }
+                                    ClientAppointmentsScreen(isProVersion = isProVersion) { navController.popBackStack() }
                                 }
                             }
                         }

@@ -38,7 +38,10 @@ import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ClientAppointmentsScreen(onBack: () -> Unit) {
+fun ClientAppointmentsScreen(
+    isProVersion: Boolean = false,
+    onBack: () -> Unit
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val db = FirebaseFirestore.getInstance()
@@ -47,8 +50,8 @@ fun ClientAppointmentsScreen(onBack: () -> Unit) {
 
     var appointments by remember { mutableStateOf<List<Appointment>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
-    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Próximos, 1 = Histórico
-    
+    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Próximos/Hoje, 1 = Histórico/Próximos, 2 = Histórico
+
     var showCancellationBlockDialog by remember { mutableStateOf(false) }
     var cancellationBlockMessage by remember { mutableStateOf("") }
     
@@ -59,69 +62,142 @@ fun ClientAppointmentsScreen(onBack: () -> Unit) {
     var evaluationComment by remember { mutableStateOf("") }
     var isFavoriteChecked by remember { mutableStateOf(false) }
 
-    LaunchedEffect(userUid) {
+    LaunchedEffect(userUid, isProVersion) {
         if (userUid != null) {
-            val registration = db.collection("appointments")
-                .whereEqualTo("clientUid", userUid)
-                .addSnapshotListener { snapshot, error ->
-                    if (error != null) {
-                        isLoading = false
-                        return@addSnapshotListener
-                    }
-                    appointments = snapshot?.toObjects(Appointment::class.java) ?: emptyList()
+            val query = if (isProVersion) {
+                db.collection("appointments").whereEqualTo("salonId", userUid)
+            } else {
+                db.collection("appointments").whereEqualTo("clientUid", userUid)
+            }
+            query.addSnapshotListener { snapshot, error ->
+                if (error != null) {
                     isLoading = false
+                    return@addSnapshotListener
                 }
+                appointments = snapshot?.toObjects(Appointment::class.java) ?: emptyList()
+                isLoading = false
+            }
             
-            db.collection("reviews")
-                .whereEqualTo("userId", userUid)
-                .addSnapshotListener { reviewSnapshot, _ ->
-                    if (reviewSnapshot != null) {
-                        evaluatedAppointmentIds = reviewSnapshot.documents.mapNotNull { it.getString("appointmentId") }.toSet()
+            if (!isProVersion) {
+                db.collection("reviews")
+                    .whereEqualTo("userId", userUid)
+                    .addSnapshotListener { reviewSnapshot, _ ->
+                        if (reviewSnapshot != null) {
+                            evaluatedAppointmentIds = reviewSnapshot.documents.mapNotNull { it.getString("appointmentId") }.toSet()
+                        }
                     }
-                }
+            }
         } else {
             isLoading = false
         }
     }
 
-    val today = Date()
-    val upcomingAppointments = remember(appointments) {
+    val calNow = Calendar.getInstance()
+    val startOfToday = (calNow.clone() as Calendar).apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.time
+
+    val endOfToday = (calNow.clone() as Calendar).apply {
+        set(Calendar.HOUR_OF_DAY, 23)
+        set(Calendar.MINUTE, 59)
+        set(Calendar.SECOND, 59)
+        set(Calendar.MILLISECOND, 999)
+    }.time
+
+    val todayAppointments = remember(appointments) {
         appointments.filter { appt ->
-            val apptDate = appt.date
-            apptDate != null && !apptDate.before(today) && appt.status != "CANCELLED"
+            val d = appt.date
+            d != null && !d.before(startOfToday) && !d.after(endOfToday) && appt.status != "CANCELLED"
         }.sortedBy { it.date }
     }
 
-    val pastAppointments = remember(appointments) {
-        appointments.filter { appt ->
-            val apptDate = appt.date
-            apptDate == null || apptDate.before(today) || appt.status == "CANCELLED"
-        }.sortedByDescending { it.date }
+    val upcomingAppointments = remember(appointments, isProVersion) {
+        if (isProVersion) {
+            appointments.filter { appt ->
+                val d = appt.date
+                d != null && d.after(endOfToday) && appt.status != "CANCELLED"
+            }.sortedBy { it.date }
+        } else {
+            val today = Date()
+            appointments.filter { appt ->
+                val apptDate = appt.date
+                apptDate != null && !apptDate.before(today) && appt.status != "CANCELLED"
+            }.sortedBy { it.date }
+        }
+    }
+
+    val pastAppointments = remember(appointments, isProVersion) {
+        if (isProVersion) {
+            appointments.filter { appt ->
+                val d = appt.date
+                d == null || d.before(startOfToday) || appt.status == "CANCELLED"
+            }.sortedByDescending { it.date }
+        } else {
+            val today = Date()
+            appointments.filter { appt ->
+                val apptDate = appt.date
+                apptDate == null || apptDate.before(today) || appt.status == "CANCELLED"
+            }.sortedByDescending { it.date }
+        }
     }
 
     val dateFormatter = remember { SimpleDateFormat("dd/MM/yyyy 'às' HH:mm", Locale("pt", "BR")) }
+    val timeFormatter = remember { SimpleDateFormat("HH:mm", Locale("pt", "BR")) }
     val currencyFormatter = remember { NumberFormat.getCurrencyInstance(Locale("pt", "BR")) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Meus Agendamentos", fontWeight = FontWeight.Bold) },
+                title = { Text(if (isProVersion) "Meus Agendamentos (Salão)" else "Meus Agendamentos", fontWeight = FontWeight.Bold) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } }
             )
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            TabRow(selectedTabIndex = selectedTab) {
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    text = { Text("Próximos (${upcomingAppointments.size})", fontWeight = FontWeight.Bold) }
-                )
-                Tab(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    text = { Text("Histórico", fontWeight = FontWeight.Bold) }
-                )
+            if (isProVersion) {
+                TabRow(selectedTabIndex = selectedTab) {
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        text = { Text("Hoje (${todayAppointments.size})", fontWeight = FontWeight.Bold) }
+                    )
+                    Tab(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        text = { Text("Próximos (${upcomingAppointments.size})", fontWeight = FontWeight.Bold) }
+                    )
+                    Tab(
+                        selected = selectedTab == 2,
+                        onClick = { selectedTab = 2 },
+                        text = { Text("Histórico (${pastAppointments.size})", fontWeight = FontWeight.Bold) }
+                    )
+                }
+            } else {
+                TabRow(selectedTabIndex = selectedTab) {
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        text = { Text("Próximos (${upcomingAppointments.size})", fontWeight = FontWeight.Bold) }
+                    )
+                    Tab(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        text = { Text("Histórico (${pastAppointments.size})", fontWeight = FontWeight.Bold) }
+                    )
+                }
+            }
+
+            val listToDisplay = if (isProVersion) {
+                when (selectedTab) {
+                    0 -> todayAppointments
+                    1 -> upcomingAppointments
+                    else -> pastAppointments
+                }
+            } else {
+                if (selectedTab == 0) upcomingAppointments else pastAppointments
             }
 
             if (isLoading) {
@@ -129,41 +205,55 @@ fun ClientAppointmentsScreen(onBack: () -> Unit) {
                     CircularProgressIndicator()
                 }
             } else {
-                val listToDisplay = if (selectedTab == 0) upcomingAppointments else pastAppointments
-
                 if (listToDisplay.isEmpty()) {
                     Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         Text(
-                            text = if (selectedTab == 0) "Nenhum agendamento futuro." else "Nenhum agendamento no histórico.",
+                            text = if (isProVersion) {
+                                when (selectedTab) {
+                                    0 -> "Nenhum atendimento para hoje! 🎉"
+                                    1 -> "Nenhum agendamento futuro."
+                                    else -> "Nenhum histórico."
+                                }
+                            } else {
+                                if (selectedTab == 0) "Nenhum agendamento futuro." else "Nenhum agendamento no histórico."
+                            },
                             color = MaterialTheme.colorScheme.outline
                         )
                     }
                 } else {
                     LazyColumn(
                         modifier = Modifier.weight(1f).fillMaxWidth(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         items(listToDisplay, key = { it.id }) { appt ->
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = RoundedCornerShape(10.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (appt.status == "PENDING") {
+                                        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
+                                    } else {
+                                        MaterialTheme.colorScheme.surface
+                                    }
+                                ),
+                                border = if (appt.status == "PENDING") BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f)) else BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
                             ) {
-                                Column(modifier = Modifier.padding(16.dp)) {
+                                Column(modifier = Modifier.padding(10.dp)) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.Top
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
                                                 text = appt.serviceName,
                                                 fontWeight = FontWeight.Bold,
-                                                fontSize = 18.sp
+                                                fontSize = 16.sp
                                             )
                                             Text(
-                                                text = "Profissional: ${appt.professionalName.ifBlank { "Tanto faz" }}",
-                                                style = MaterialTheme.typography.bodyMedium,
+                                                text = if (isProVersion) "Cliente: ${appt.clientName}" else "Profissional: ${appt.professionalName.ifBlank { "Tanto faz" }}",
+                                                style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
@@ -172,10 +262,11 @@ fun ClientAppointmentsScreen(onBack: () -> Unit) {
                                         val (statusText, badgeColor) = when (appt.status) {
                                             "CONFIRMED" -> "Confirmado" to Color(0xFF4CAF50)
                                             "PENDING" -> "Pendente" to Color(0xFFFF9800)
+                                            "SERVED" -> "Realizado" to Color(0xFF2E7D32)
                                             "CANCELLED" -> {
                                                 val txt = when (appt.cancelledBy) {
-                                                    "CLIENT" -> "Cancelado por você"
-                                                    "SALON" -> "Cancelado pelo salão"
+                                                    "CLIENT" -> "Cancelado p/ cliente"
+                                                    "SALON" -> "Cancelado p/ salão"
                                                     else -> "Cancelado"
                                                 }
                                                 txt to Color(0xFFE53935)
@@ -187,21 +278,21 @@ fun ClientAppointmentsScreen(onBack: () -> Unit) {
                                         Surface(
                                             color = badgeColor.copy(alpha = 0.15f),
                                             shape = RoundedCornerShape(6.dp),
-                                            modifier = Modifier.padding(start = 8.dp)
+                                            modifier = Modifier.padding(start = 6.dp)
                                         ) {
                                             Text(
                                                 text = statusText,
                                                 color = badgeColor,
                                                 fontWeight = FontWeight.Bold,
-                                                fontSize = 12.sp,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                fontSize = 11.sp,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                             )
                                         }
                                     }
 
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    HorizontalDivider()
-                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                    Spacer(modifier = Modifier.height(6.dp))
 
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
@@ -217,24 +308,64 @@ fun ClientAppointmentsScreen(onBack: () -> Unit) {
                                             Text(
                                                 text = appt.date?.let { dateFormatter.format(it) } ?: "Sem data",
                                                 fontWeight = FontWeight.Bold,
-                                                fontSize = 14.sp
+                                                fontSize = 13.sp
                                             )
                                         }
 
                                         Text(
                                             text = if (appt.loyaltyRedeemed) "Grátis (Fidelidade)" else currencyFormatter.format(appt.servicePrice),
                                             fontWeight = FontWeight.ExtraBold,
-                                            fontSize = 16.sp,
+                                            fontSize = 15.sp,
                                             color = if (appt.loyaltyRedeemed) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary
                                         )
                                     }
 
-                                    // Botões de Ação para Agendamentos Futuros
-                                    if (selectedTab == 0) {
-                                        Spacer(modifier = Modifier.height(16.dp))
+                                    // Botões de Ação para Pro Version
+                                    if (isProVersion && appt.status == "PENDING") {
+                                        Spacer(modifier = Modifier.height(8.dp))
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Button(
+                                                onClick = {
+                                                    scope.launch {
+                                                        AppointmentRepository().updateAppointmentStatus(appt.id, "CONFIRMED")
+                                                        Toast.makeText(context, "Agendamento aceito!", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                },
+                                                modifier = Modifier.weight(1f).height(36.dp),
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                                                contentPadding = PaddingValues(0.dp)
+                                            ) {
+                                                Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(14.dp))
+                                                Spacer(Modifier.width(4.dp))
+                                                Text("Aceitar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                            OutlinedButton(
+                                                onClick = {
+                                                    scope.launch {
+                                                        AppointmentRepository().updateAppointmentStatus(appt.id, "CANCELLED")
+                                                        Toast.makeText(context, "Agendamento recusado.", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                },
+                                                modifier = Modifier.weight(1f).height(36.dp),
+                                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                                contentPadding = PaddingValues(0.dp)
+                                            ) {
+                                                Icon(Icons.Default.Cancel, null, modifier = Modifier.size(14.dp))
+                                                Spacer(Modifier.width(4.dp))
+                                                Text("Recusar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+
+                                    // Botões de Ação para Agendamentos Futuros no Cliente
+                                    if (!isProVersion && selectedTab == 0) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                                         ) {
                                             // Adicionar ao Calendário
                                             Button(
@@ -248,13 +379,14 @@ fun ClientAppointmentsScreen(onBack: () -> Unit) {
                                                     }
                                                     context.startActivity(intent)
                                                 },
-                                                modifier = Modifier.weight(1.2f),
+                                                modifier = Modifier.weight(1.2f).height(36.dp),
                                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer),
-                                                shape = RoundedCornerShape(8.dp)
+                                                shape = RoundedCornerShape(6.dp),
+                                                contentPadding = PaddingValues(0.dp)
                                             ) {
-                                                Icon(Icons.Default.CalendarMonth, null, modifier = Modifier.size(16.dp))
+                                                Icon(Icons.Default.CalendarMonth, null, modifier = Modifier.size(14.dp))
                                                 Spacer(modifier = Modifier.width(4.dp))
-                                                Text("Calendário", fontSize = 13.sp)
+                                                Text("Calendário", fontSize = 12.sp)
                                             }
 
                                             // Cancelar Agendamento
@@ -282,27 +414,24 @@ fun ClientAppointmentsScreen(onBack: () -> Unit) {
                                                                 }
                                                             }
                                                         } catch (e: Exception) {
-                                                            val result = AppointmentRepository().updateAppointmentStatus(appt.id, "CANCELLED")
-                                                            if (result.isSuccess) {
-                                                                Toast.makeText(context, "Agendamento Cancelado!", Toast.LENGTH_SHORT).show()
-                                                            }
+                                                            Toast.makeText(context, "Erro ao processar cancelamento", Toast.LENGTH_SHORT).show()
                                                         }
                                                     }
                                                 },
-                                                modifier = Modifier.weight(1f),
+                                                modifier = Modifier.weight(1f).height(36.dp),
                                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
-                                                shape = RoundedCornerShape(8.dp)
+                                                shape = RoundedCornerShape(6.dp),
+                                                contentPadding = PaddingValues(0.dp)
                                             ) {
-                                                Icon(Icons.Default.Cancel, null, modifier = Modifier.size(16.dp))
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text("Cancelar", fontSize = 13.sp)
+                                                Icon(Icons.Default.Cancel, null, modifier = Modifier.size(14.dp))
+                                                Spacer(Modifier.width(4.dp))
+                                                Text("Cancelar", fontSize = 12.sp)
                                             }
                                         }
                                     }
 
                                     // Botões de Ação para Agendamentos Passados (Avaliar)
-                                    if (selectedTab == 1 && appt.status == "CONFIRMED" && appt.id !in evaluatedAppointmentIds && appt.professionalId.isNotBlank()) {
+                                    if (!isProVersion && selectedTab == 1 && appt.status == "CONFIRMED" && appt.id !in evaluatedAppointmentIds && appt.professionalId.isNotBlank()) {
                                         Spacer(modifier = Modifier.height(16.dp))
                                         Button(
                                             onClick = {

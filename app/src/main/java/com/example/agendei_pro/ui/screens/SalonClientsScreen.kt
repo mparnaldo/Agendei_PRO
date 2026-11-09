@@ -170,8 +170,8 @@ fun SalonClientsScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     items(filteredClients) { item ->
                         val hasReward = item.unredeemedStamps >= loyaltyRequired
@@ -180,6 +180,7 @@ fun SalonClientsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { selectedClientForDetails = item },
+                            shape = RoundedCornerShape(10.dp),
                             colors = CardDefaults.cardColors(
                                 containerColor = if (item.isBlocked) {
                                     MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f)
@@ -194,23 +195,23 @@ fun SalonClientsScreen(
                             } else if (hasReward) {
                                 BorderStroke(1.5.dp, Color(0xFF2E7D32))
                             } else {
-                                BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                                BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
                             }
                         ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
+                            Column(modifier = Modifier.padding(10.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     if (item.profile.photoUrl.isNotEmpty()) {
                                         AsyncImage(
                                             model = item.profile.photoUrl,
                                             contentDescription = null,
                                             modifier = Modifier
-                                                .size(50.dp)
+                                                .size(38.dp)
                                                 .clip(CircleShape),
                                             contentScale = ContentScale.Crop
                                         )
                                     } else {
                                         Surface(
-                                            modifier = Modifier.size(50.dp),
+                                            modifier = Modifier.size(38.dp),
                                             shape = CircleShape,
                                             color = MaterialTheme.colorScheme.primaryContainer
                                         ) {
@@ -218,19 +219,19 @@ fun SalonClientsScreen(
                                                 Text(
                                                     text = item.profile.name.take(1).uppercase(),
                                                     fontWeight = FontWeight.Bold,
-                                                    style = MaterialTheme.typography.titleMedium
+                                                    style = MaterialTheme.typography.titleSmall
                                                 )
                                             }
                                         }
                                     }
 
-                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Spacer(modifier = Modifier.width(10.dp))
 
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = item.profile.name,
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 16.sp
+                                            fontSize = 15.sp
                                         )
                                         Text(
                                             text = item.profile.email,
@@ -248,23 +249,27 @@ fun SalonClientsScreen(
 
                                     // Ações Rápidas (Chamada / WhatsApp)
                                     if (item.profile.phoneNumber.isNotEmpty()) {
-                                        IconButton(onClick = {
-                                            val cleanPhone = item.profile.phoneNumber.replace(Regex("[^0-9]"), "")
-                                            val intent = Intent(Intent.ACTION_VIEW).apply {
-                                                data = Uri.parse("https://api.whatsapp.com/send?phone=$cleanPhone")
-                                            }
-                                            context.startActivity(intent)
-                                        }) {
+                                        IconButton(
+                                            onClick = {
+                                                val cleanPhone = item.profile.phoneNumber.replace(Regex("[^0-9]"), "")
+                                                val intent = Intent(Intent.ACTION_VIEW).apply {
+                                                    data = Uri.parse("https://api.whatsapp.com/send?phone=$cleanPhone")
+                                                }
+                                                context.startActivity(intent)
+                                            },
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
                                             Icon(
                                                 imageVector = Icons.Default.Chat,
                                                 contentDescription = "WhatsApp",
-                                                tint = Color(0xFF25D366)
+                                                tint = Color(0xFF25D366),
+                                                modifier = Modifier.size(20.dp)
                                             )
                                         }
                                     }
                                 }
 
-                                Spacer(modifier = Modifier.height(12.dp))
+                                Spacer(modifier = Modifier.height(6.dp))
 
                                 // Informações do Cartão Fidelidade
                                 Row(
@@ -275,7 +280,7 @@ fun SalonClientsScreen(
                                     Text(
                                         text = "Selos: ${item.unredeemedStamps} / $loyaltyRequired",
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp,
+                                        fontSize = 12.sp,
                                         color = if (hasReward) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurface
                                     )
                                     if (hasReward) {
@@ -294,29 +299,30 @@ fun SalonClientsScreen(
                                     }
                                 }
 
-                                Spacer(modifier = Modifier.height(6.dp))
+                                Spacer(modifier = Modifier.height(4.dp))
 
                                 val progress = (item.unredeemedStamps.toFloat() / loyaltyRequired.toFloat()).coerceAtMost(1f)
                                 LinearProgressIndicator(
                                     progress = { progress },
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(8.dp)
-                                        .clip(RoundedCornerShape(4.dp)),
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
                                     color = if (hasReward) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
                                     trackColor = MaterialTheme.colorScheme.surfaceVariant
                                 )
 
                                 if (hasReward) {
-                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Spacer(modifier = Modifier.height(8.dp))
                                     Button(
                                         onClick = { clientToRedeem = item },
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
-                                        modifier = Modifier.fillMaxWidth()
+                                        modifier = Modifier.fillMaxWidth().height(36.dp),
+                                        contentPadding = PaddingValues(0.dp)
                                     ) {
-                                        Icon(Icons.Default.Celebration, null)
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Resgatar Prêmio: $loyaltyReward")
+                                        Icon(Icons.Default.Celebration, null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Resgatar Prêmio: $loyaltyReward", fontSize = 12.sp)
                                     }
                                 }
                             }

@@ -1,7 +1,9 @@
 package com.example.agendei_pro.ui.screens
 
 import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.Canvas
@@ -234,22 +236,12 @@ fun ClientDashboardScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            painter = androidx.compose.ui.res.painterResource(id = com.example.agendei_pro.core.R.drawable.ic_logo_linear),
-                            contentDescription = "Agendei Logo",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Text(
-                            text = "Agendei",
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    }
+                    Image(
+                        painter = androidx.compose.ui.res.painterResource(id = com.example.agendei_pro.R.drawable.agendeimenu),
+                        contentDescription = "Agendei Logo",
+                        modifier = Modifier.height(28.dp),
+                        contentScale = ContentScale.Fit
+                    )
                 },
                 navigationIcon = {
                     IconButton(onClick = onMenuClick) {
@@ -274,7 +266,13 @@ fun ClientDashboardScreen(
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { if (!isBlocked) onNewAppointment() },
+                onClick = {
+                    if (isBlocked) {
+                        Toast.makeText(context, "Seu cadastro está bloqueado para online. Entre em contato com o salão.", Toast.LENGTH_LONG).show()
+                    } else {
+                        onNewAppointment()
+                    }
+                },
                 icon = { Icon(Icons.Default.Add, null) },
                 text = { Text("Novo Agendamento") },
                 containerColor = if (isBlocked) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary,
@@ -638,7 +636,9 @@ fun ClientDashboardScreen(
                         
                         Button(
                             onClick = {
-                                if (!isBlocked) {
+                                if (isBlocked) {
+                                    Toast.makeText(context, "Seu cadastro está bloqueado para online. Entre em contato com o salão.", Toast.LENGTH_LONG).show()
+                                } else {
                                     onNewAppointmentWithPro(favoriteProfessionalId)
                                 }
                             },

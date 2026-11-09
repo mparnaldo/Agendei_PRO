@@ -99,7 +99,7 @@ fun SalonPromotionScreen(onNavigateBack: () -> Unit) {
                 FilterChip(
                     selected = displayType == "POPUP",
                     onClick = { displayType = "POPUP" },
-                    label = { Text("Pop-up Modal") }
+                    label = { Text("Pop-up (Aviso)") }
                 )
             }
 

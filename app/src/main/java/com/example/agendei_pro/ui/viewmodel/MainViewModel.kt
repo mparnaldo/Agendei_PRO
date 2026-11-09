@@ -6,6 +6,9 @@ import com.example.agendei_pro.core.model.*
 import com.example.agendei_pro.core.repository.*
 import com.example.agendei_pro.ui.theme.AgendeiTheme
 import com.example.agendei_pro.ui.theme.ThemeLuxury
+import android.content.Context
+import com.example.agendei_pro.ui.theme.AllAgendeiThemes
+import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.flow.*
@@ -43,6 +46,11 @@ class MainViewModel(
     private val _selectedTheme = MutableStateFlow<AgendeiTheme>(ThemeLuxury)
     val selectedTheme: StateFlow<AgendeiTheme> = _selectedTheme
 
+    private val _isCurrentClientBlocked = MutableStateFlow(false)
+    val isCurrentClientBlocked: StateFlow<Boolean> = _isCurrentClientBlocked
+    
+    private var myBindingsListener: com.google.firebase.firestore.ListenerRegistration? = null
+
     private val _clientAppointments = MutableStateFlow<List<Appointment>>(emptyList())
     val clientAppointments = _clientAppointments.asStateFlow()
 
@@ -75,6 +83,13 @@ class MainViewModel(
     val statusMessage = _statusMessage.asSharedFlow()
 
     init {
+        try {
+            val context = FirebaseApp.getInstance().applicationContext
+            val prefs = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
+            val savedThemeId = prefs.getInt("selected_theme_id", 1)
+            val initialTheme = AllAgendeiThemes.find { it.id == savedThemeId } ?: ThemeLuxury
+            _selectedTheme.value = initialTheme
+        } catch (e: Exception) {}
     }
 
     fun checkUserStatus(isProVersion: Boolean) {
@@ -145,6 +160,11 @@ class MainViewModel(
 
     private fun loadClientStatus(userId: String) {
         viewModelScope.launch {
+            myBindingsListener?.remove()
+            myBindingsListener = clientRepository.listenMyBindings { updatedBindings ->
+                _isCurrentClientBlocked.value = updatedBindings.firstOrNull()?.isBlocked == true
+            }
+
             val bindings = clientRepository.getMyBindings()
             if (bindings.isEmpty()) {
                 _authState.value = AuthState.AuthenticatedNoBindings
@@ -226,7 +246,14 @@ class MainViewModel(
         }
     }
 
-    fun setTheme(theme: AgendeiTheme) { _selectedTheme.value = theme }
+    fun setTheme(theme: AgendeiTheme) {
+        _selectedTheme.value = theme
+        try {
+            val context = FirebaseApp.getInstance().applicationContext
+            val prefs = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
+            prefs.edit().putInt("selected_theme_id", theme.id).apply()
+        } catch (e: Exception) {}
+    }
 
     fun logout() {
         FirebaseMessaging.getInstance().unsubscribeFromTopic("salons")
@@ -397,9 +424,11 @@ class MainViewModel(
                 val profiles = salonRepository.getSalonClients(state.salon.id)
                 val items = profiles.map { profile ->
                     val bindingSnap = db.collection("user_bindings")
-                        .document("${profile.uid}_${state.salon.id}")
+                        .whereEqualTo("userId", profile.uid)
+                        .whereEqualTo("salonId", state.salon.id)
                         .get().await()
-                    val isBlocked = bindingSnap.getBoolean("isBlocked") ?: false
+                    val bindingDoc = bindingSnap.documents.firstOrNull()
+                    val isBlocked = bindingDoc?.getBoolean("isBlocked") ?: false
                     
                     val history = appointmentRepository.getClientHistory(profile.uid)
                     val salonHistory = history.filter { it.salonId == state.salon.id }
