@@ -19,6 +19,8 @@ local.properties
 .firebase/
 firebase-debug.log*
 .firebaserc
+*-key.json
+firebase-admin-key.json
 
 # Node (Functions)
 functions/node_modules/
