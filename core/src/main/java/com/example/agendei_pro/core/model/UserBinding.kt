@@ -15,6 +15,8 @@ data class UserBinding(
     val isDefault: Boolean = false,
     val salonLogoUrl: String? = null,
     val salonLogoShape: String = "ROUND",
+    @get:PropertyName("isBlocked")
+    @field:PropertyName("isBlocked")
     val isBlocked: Boolean = false,
     val favoriteProfessionalId: String? = null,
     val favoriteProfessionalName: String? = null,

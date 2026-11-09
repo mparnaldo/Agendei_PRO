@@ -2,6 +2,8 @@ package com.example.agendei_pro.core.service
 
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import kotlinx.coroutines.launch
+import com.example.agendei_pro.core.service.showLocalNotification
 
 class MyFirebaseMessagingService : FirebaseMessagingService() {
 
@@ -18,7 +20,13 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        // Se o token mudar, o MainViewModel já cuida de salvar no próximo checkStatus, 
-        // mas o ideal seria salvar aqui também se o usuário estivesse logado.
+        val profileRepository = com.example.agendei_pro.core.repository.ProfileRepository()
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                profileRepository.updateFcmToken(token)
+            } catch (e: Exception) {
+                // Falha silenciosa se não autenticado
+            }
+        }
     }
 }

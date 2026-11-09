@@ -226,11 +226,25 @@ class SalonRepository {
 
     suspend fun updateClientBlockStatus(salonId: String, clientUid: String, isBlocked: Boolean): Result<Unit> {
         return try {
-            firestore.collection("user_bindings")
-                .document("${clientUid}_${salonId}")
-                .update("isBlocked", isBlocked)
+            val snapshots = firestore.collection("user_bindings")
+                .whereEqualTo("userId", clientUid)
+                .whereEqualTo("salonId", salonId)
+                .get()
                 .await()
-            Result.success(Unit)
+            val doc = snapshots.documents.firstOrNull()
+            if (doc != null) {
+                doc.reference.update("isBlocked", isBlocked).await()
+                Result.success(Unit)
+            } else {
+                // Se não existir, criamos o documento com ID fixo para garantir
+                val binding = UserBinding(
+                    userId = clientUid,
+                    salonId = salonId,
+                    isBlocked = isBlocked
+                )
+                firestore.collection("user_bindings").document("${clientUid}_${salonId}").set(binding).await()
+                Result.success(Unit)
+            }
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -363,8 +377,13 @@ class SalonRepository {
 
     suspend fun getUserBinding(salonId: String, clientUid: String): UserBinding? {
         return try {
-            val doc = firestore.collection("user_bindings").document("${clientUid}_${salonId}").get().await()
-            doc.toObject(UserBinding::class.java)
+            val snapshots = firestore.collection("user_bindings")
+                .whereEqualTo("userId", clientUid)
+                .whereEqualTo("salonId", salonId)
+                .get()
+                .await()
+            val doc = snapshots.documents.firstOrNull()
+            doc?.toObject(UserBinding::class.java)
         } catch (e: Exception) {
             null
         }

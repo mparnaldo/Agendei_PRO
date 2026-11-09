@@ -22,6 +22,17 @@ class ClientRepository {
         }
     }
 
+    fun listenMyBindings(onUpdate: (List<UserBinding>) -> Unit): com.google.firebase.firestore.ListenerRegistration? {
+        val user = auth.currentUser ?: return null
+        return firestore.collection("user_bindings")
+            .whereEqualTo("userId", user.uid)
+            .addSnapshotListener { snapshot, e ->
+                if (e != null || snapshot == null) return@addSnapshotListener
+                val bindings = snapshot.toObjects(UserBinding::class.java)
+                onUpdate(bindings)
+            }
+    }
+
     suspend fun linkSalon(
         salonId: String, 
         salonName: String, 

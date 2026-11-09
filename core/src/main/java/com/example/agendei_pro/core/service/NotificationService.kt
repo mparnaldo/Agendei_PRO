@@ -2,6 +2,7 @@ package com.example.agendei_pro.core.service
 
 import android.app.Notification
 import android.app.NotificationChannel
+import com.example.agendei_pro.core.service.showLocalNotification
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
@@ -42,24 +43,24 @@ class NotificationService : Service() {
     }
 
     private fun startForegroundService() {
-        // Identifica se a aplicação em execução é a versão PRO usando o package name
-        val isProVersion = packageName == "com.example.agendei_pro"
-        val persistentChannelId = "notification_service_channel"
+        val persistentChannelId = "sync_silent_channel_v2"
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 persistentChannelId,
-                "Sincronização em Segundo Plano",
-                NotificationManager.IMPORTANCE_MIN
+                "Sincronização",
+                NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Mantém a sincronização de agendamentos e chamados ativa"
+                description = "Sincronização em segundo plano"
                 setShowBadge(false)
+                setSound(null, null)
+                enableLights(false)
+                enableVibration(false)
             }
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
         }
 
-        // Obtém dinamicamente o Intent de inicialização para evitar dependência de MainActivity::class.java
         val notificationIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
@@ -72,19 +73,14 @@ class NotificationService : Service() {
             )
         }
 
-        val text = if (isProVersion) {
-            "Buscando novos agendamentos do salão..."
-        } else {
-            "Buscando atualizações de seus agendamentos..."
-        }
-
         val notificationBuilder = NotificationCompat.Builder(this, persistentChannelId)
-            .setContentTitle(if (isProVersion) "Agendei PRO" else "Agendei")
-            .setContentText(text)
+            .setContentTitle("")
+            .setContentText("Serviço ativo")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+            .setShowWhen(false)
 
         if (pendingIntent != null) {
             notificationBuilder.setContentIntent(pendingIntent)
