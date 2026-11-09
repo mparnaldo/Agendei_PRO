@@ -140,34 +140,101 @@ class AgendaViewModel(private val repository: AppointmentRepository = Appointmen
         }
     }
 
-    fun blockTimeSlot(date: Date, timeStr: String, reason: String, professionalId: String, professionalName: String) {
+    fun blockTimeSlot(
+        date: Date,
+        timeStr: String,
+        reason: String,
+        professionalId: String,
+        professionalName: String,
+        durationMinutes: Int = 30,
+        recurrenceType: String = "ONCE",
+        repeatCount: Int = 1
+    ) {
         val id = salonId ?: return
         viewModelScope.launch {
             try {
                 val timeParts = timeStr.split(":")
-                val cal = Calendar.getInstance().apply {
+                val hour = timeParts[0].toInt()
+                val min = timeParts[1].toInt()
+                
+                val baseCal = Calendar.getInstance().apply {
                     time = date
-                    set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
-                    set(Calendar.MINUTE, timeParts[1].toInt())
+                    set(Calendar.HOUR_OF_DAY, hour)
+                    set(Calendar.MINUTE, min)
                     set(Calendar.SECOND, 0)
                     set(Calendar.MILLISECOND, 0)
                 }
-                val interval = _salon.value?.slotIntervalMinutes ?: 30
-                val duration = if (interval > 0) interval else 30
-                val appt = Appointment(
-                    clientName = "Bloqueado: $reason",
-                    clientUid = "BLOCKAGE",
-                    salonId = id,
-                    serviceId = "BLOCKAGE",
-                    serviceName = "Ausência",
-                    servicePrice = 0.0,
-                    date = cal.time,
-                    status = "BLOCKED",
-                    professionalId = professionalId,
-                    professionalName = professionalName,
-                    serviceDurationMinutes = duration
-                )
-                repository.createAppointment(appt)
+
+                val count = repeatCount.coerceIn(1, 120)
+                val appointmentsToCreate = mutableListOf<Appointment>()
+
+                when (recurrenceType) {
+                    "DAILY" -> {
+                        for (i in 0 until count) {
+                            val cal = (baseCal.clone() as Calendar).apply {
+                                add(Calendar.DAY_OF_YEAR, i)
+                            }
+                            appointmentsToCreate.add(
+                                Appointment(
+                                    clientName = "Bloqueio: $reason",
+                                    clientUid = "BLOCKAGE",
+                                    salonId = id,
+                                    serviceId = "BLOCKAGE",
+                                    serviceName = "Ausência",
+                                    servicePrice = 0.0,
+                                    date = cal.time,
+                                    status = "BLOCKED",
+                                    professionalId = professionalId,
+                                    professionalName = professionalName,
+                                    serviceDurationMinutes = durationMinutes
+                                )
+                            )
+                        }
+                    }
+                    "WEEKLY" -> {
+                        for (i in 0 until count) {
+                            val cal = (baseCal.clone() as Calendar).apply {
+                                add(Calendar.WEEK_OF_YEAR, i)
+                            }
+                            appointmentsToCreate.add(
+                                Appointment(
+                                    clientName = "Bloqueio: $reason",
+                                    clientUid = "BLOCKAGE",
+                                    salonId = id,
+                                    serviceId = "BLOCKAGE",
+                                    serviceName = "Ausência",
+                                    servicePrice = 0.0,
+                                    date = cal.time,
+                                    status = "BLOCKED",
+                                    professionalId = professionalId,
+                                    professionalName = professionalName,
+                                    serviceDurationMinutes = durationMinutes
+                                )
+                            )
+                        }
+                    }
+                    else -> {
+                        appointmentsToCreate.add(
+                            Appointment(
+                                clientName = "Bloqueio: $reason",
+                                clientUid = "BLOCKAGE",
+                                salonId = id,
+                                serviceId = "BLOCKAGE",
+                                serviceName = "Ausência",
+                                servicePrice = 0.0,
+                                date = baseCal.time,
+                                status = "BLOCKED",
+                                professionalId = professionalId,
+                                professionalName = professionalName,
+                                serviceDurationMinutes = durationMinutes
+                            )
+                        )
+                    }
+                }
+
+                appointmentsToCreate.forEach { appt ->
+                    repository.createAppointment(appt)
+                }
             } catch (e: Exception) {}
         }
     }

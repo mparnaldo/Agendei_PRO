@@ -3,7 +3,6 @@ package com.example.agendei_pro.ui.screens
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -15,25 +14,28 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.*
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil3.compose.AsyncImage
 import com.example.agendei_pro.core.model.Appointment
+import com.example.agendei_pro.core.model.Professional
+import com.example.agendei_pro.core.model.Salon
+import com.example.agendei_pro.core.model.Service
 import com.example.agendei_pro.ui.viewmodel.AgendaViewModel
-import com.example.agendei_pro.ui.viewmodel.AgendaViewMode
 import java.text.SimpleDateFormat
 import java.util.*
-import coil3.compose.AsyncImage
-import androidx.compose.ui.layout.ContentScale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,14 +50,16 @@ fun AgendaScreen(
     val selectedDate by viewModel.selectedDate.collectAsState()
     val currentMonth by viewModel.currentMonth.collectAsState()
     val salonHasLoyalty by viewModel.salonHasLoyalty.collectAsState()
-    val viewMode by viewModel.viewMode.collectAsState()
     val salon by viewModel.salon.collectAsState()
     val services by viewModel.services.collectAsState()
+
+    var showDatePickerDialog by remember { mutableStateOf(false) }
     var showBlockDialog by remember { mutableStateOf(false) }
     var prefilledBlockTime by remember { mutableStateOf("08:00") }
     var prefilledBlockProId by remember { mutableStateOf("ALL") }
 
-    var professionals by remember { mutableStateOf<List<com.example.agendei_pro.core.model.Professional>>(emptyList()) }
+    var selectedStatusTab by remember { mutableIntStateOf(0) } // 0 = Todos, 1 = Pendentes, 2 = Cancelados
+    var professionals by remember { mutableStateOf<List<Professional>>(emptyList()) }
     var selectedProfessionalId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
@@ -67,7 +71,7 @@ fun AgendaScreen(
                 .collection("professionals")
                 .whereEqualTo("isActive", true)
                 .addSnapshotListener { snapshot, _ ->
-                    val list = snapshot?.toObjects(com.example.agendei_pro.core.model.Professional::class.java) ?: emptyList()
+                    val list = snapshot?.toObjects(Professional::class.java) ?: emptyList()
                     professionals = list
                 }
         }
@@ -83,46 +87,102 @@ fun AgendaScreen(
         else allAppointments.filter { it.professionalId == selectedProfessionalId || it.professionalId == "ALL" }
     }
 
+    val pendingCount = remember(filteredDayAppts) {
+        filteredDayAppts.count { it.status == "PENDING" }
+    }
+
+    val cancelledCount = remember(filteredDayAppts) {
+        filteredDayAppts.count { it.status == "CANCELLED" }
+    }
+
+    val activeCount = remember(filteredDayAppts) {
+        filteredDayAppts.count { it.status != "CANCELLED" }
+    }
+
+    val sdfHeaderDate = remember { SimpleDateFormat("EEE, dd.MM", Locale("pt", "BR")) }
+    val formattedDateHeader = remember(selectedDate) {
+        val formatted = sdfHeaderDate.format(selectedDate)
+        formatted.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+    }
+
+    val isSelectedToday = remember(selectedDate) {
+        isSameDay(selectedDate, Date())
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Agenda") },
-                navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.Default.ArrowBack, null) } },
-                actions = {
-                    IconButton(onClick = { viewModel.setViewMode(AgendaViewMode.LIST) }) {
-                        Icon(
-                            Icons.Default.FormatListBulleted,
-                            contentDescription = "Lista Completa",
-                            tint = if (viewMode == AgendaViewMode.LIST) MaterialTheme.colorScheme.primary else LocalContentColor.current
-                        )
+                title = {
+                    // Botão Central de Data Clicável (Estilo Shelton: "Sáb. 22.08 ▼")
+                    Surface(
+                        onClick = { showDatePickerDialog = true },
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.CalendarMonth,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = formattedDateHeader,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 15.sp,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Icon(
+                                Icons.Default.ArrowDropDown,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
-                    IconButton(onClick = { viewModel.setViewMode(AgendaViewMode.CALENDAR_MONTH) }) {
-                        Icon(
-                            Icons.Default.CalendarMonth,
-                            contentDescription = "Calendário",
-                            tint = if (viewMode == AgendaViewMode.CALENDAR_MONTH) MaterialTheme.colorScheme.primary else LocalContentColor.current
-                        )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar")
+                    }
+                },
+                actions = {
+                    if (!isSelectedToday) {
+                        TextButton(
+                            onClick = {
+                                viewModel.onDateSelected(Date())
+                            }
+                        ) {
+                            Text("Hoje", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    IconButton(onClick = {
+                        prefilledBlockTime = "12:00"
+                        prefilledBlockProId = selectedProfessionalId ?: "ALL"
+                        showBlockDialog = true
+                    }) {
+                        Icon(Icons.Default.Block, contentDescription = "Bloquear Horário", tint = MaterialTheme.colorScheme.error)
                     }
                 }
             )
-        },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { showBlockDialog = true },
-                icon = { Icon(Icons.Default.Block, null) },
-                text = { Text("Bloquear Horário") },
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-                contentColor = MaterialTheme.colorScheme.onErrorContainer
-            )
         }
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            
-            // Professional Filter Chips/Tabs Row
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+        ) {
+            // Header do Salão / Profissional Selecionado
             if (professionals.isNotEmpty()) {
                 ScrollableTabRow(
                     selectedTabIndex = if (selectedProfessionalId == null) 0 else professionals.indexOfFirst { it.id == selectedProfessionalId } + 1,
-                    edgePadding = 16.dp,
+                    edgePadding = 12.dp,
                     divider = {},
                     indicator = {}
                 ) {
@@ -132,11 +192,11 @@ fun AgendaScreen(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(vertical = 12.dp, horizontal = 8.dp)
+                            modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(24.dp)
+                                    .size(26.dp)
                                     .clip(CircleShape)
                                     .background(if (selectedProfessionalId == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
                                 contentAlignment = Alignment.Center
@@ -145,13 +205,14 @@ fun AgendaScreen(
                                     imageVector = Icons.Default.Groups,
                                     contentDescription = null,
                                     tint = if (selectedProfessionalId == null) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(14.dp)
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "Todos",
                                 fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
                                 color = if (selectedProfessionalId == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -164,21 +225,21 @@ fun AgendaScreen(
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(vertical = 12.dp, horizontal = 8.dp)
+                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp)
                             ) {
                                 if (!pro.photoUrl.isNullOrBlank()) {
                                     AsyncImage(
                                         model = pro.photoUrl,
                                         contentDescription = pro.name,
                                         modifier = Modifier
-                                            .size(24.dp)
+                                            .size(26.dp)
                                             .clip(CircleShape),
                                         contentScale = ContentScale.Crop
                                     )
                                 } else {
                                     Box(
                                         modifier = Modifier
-                                            .size(24.dp)
+                                            .size(26.dp)
                                             .clip(CircleShape)
                                             .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
                                         contentAlignment = Alignment.Center
@@ -195,354 +256,500 @@ fun AgendaScreen(
                                 Text(
                                     text = pro.name,
                                     fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
                                     color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
                     }
                 }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             }
 
-            if (viewMode == AgendaViewMode.CALENDAR_MONTH) {
-                // Exibe o calendário no topo
-                MonthlyCalendarView(
-                    allAppointments = filteredAllAppts,
-                    selectedDate = selectedDate,
-                    currentMonth = currentMonth,
-                    onNavigateMonth = { viewModel.navigateMonth(it) },
-                    onDateSelected = { viewModel.onDateSelected(it) }
-                )
-                
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                
-                // Exibe a lista do dia selecionado embaixo
-                AgendaListView(
-                    appointments = filteredDayAppts,
-                    selectedDate = selectedDate,
-                    title = "Agendamentos do Dia",
-                    hasLoyalty = salonHasLoyalty,
-                    salon = salon,
-                    services = services,
-                    selectedProfessionalId = selectedProfessionalId,
-                    professionals = professionals,
-                    onValidateLoyalty = { viewModel.updateLoyaltyValidation(it, true) },
-                    onUpdateStatus = { id, s -> viewModel.updateStatus(id, s) },
-                    onDeleteBlockage = { viewModel.deleteAppointment(it) },
-                    onBlockSlot = { time, proId ->
-                        prefilledBlockTime = time
-                        prefilledBlockProId = proId
-                        showBlockDialog = true
+            // Abas de Status: Todos | Pendentes | Cancelados (Fim da poluição visual!)
+            TabRow(
+                selectedTabIndex = selectedStatusTab,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Tab(
+                    selected = selectedStatusTab == 0,
+                    onClick = { selectedStatusTab = 0 },
+                    text = {
+                        Text("Todos ($activeCount)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                 )
-            } else {
-                // Exibe a linha do tempo / lista contínua rolando
-                TimelineView(
-                    allAppointments = filteredAllAppts,
-                    hasLoyalty = salonHasLoyalty,
-                    onValidateLoyalty = { viewModel.updateLoyaltyValidation(it, true) },
-                    onUpdateStatus = { id, s -> viewModel.updateStatus(id, s) },
-                    onDeleteBlockage = { viewModel.deleteAppointment(it) }
-                )
-            }
-        }
-    }
-
-    if (showBlockDialog) {
-        var selectedBlockDate by remember { mutableStateOf(selectedDate) }
-        var timeStr by remember { mutableStateOf(prefilledBlockTime) }
-        var reason by remember { mutableStateOf("Almoço") }
-        var selectedProId by remember { mutableStateOf(prefilledBlockProId) }
-        var showProDropdown by remember { mutableStateOf(false) }
-        val selectedProName = remember(selectedProId, professionals) {
-            if (selectedProId == "ALL") "Todo o Salão"
-            else professionals.find { it.id == selectedProId }?.name ?: "Profissional"
-        }
-        
-        val dateStr = remember(selectedBlockDate) {
-            SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(selectedBlockDate)
-        }
-
-        AlertDialog(
-            onDismissRequest = { showBlockDialog = false },
-            title = { Text("Bloquear Horário") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Selecione os detalhes para o bloqueio da agenda:", style = MaterialTheme.typography.bodyMedium)
-                    
-                    // Seletor de Data
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                val c = Calendar.getInstance().apply { time = selectedBlockDate }
-                                android.app.DatePickerDialog(
-                                    context,
-                                    { _, y, m, d ->
-                                        val newCal = Calendar.getInstance().apply {
-                                            time = selectedBlockDate
-                                            set(Calendar.YEAR, y)
-                                            set(Calendar.MONTH, m)
-                                            set(Calendar.DAY_OF_MONTH, d)
-                                        }
-                                        selectedBlockDate = newCal.time
-                                    },
-                                    c.get(Calendar.YEAR),
-                                    c.get(Calendar.MONTH),
-                                    c.get(Calendar.DAY_OF_MONTH)
-                                ).show()
-                            }
-                    ) {
-                        OutlinedTextField(
-                            value = dateStr,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Data do Bloqueio") },
-                            trailingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = "Selecionar Data") },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = false,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                                disabledBorderColor = MaterialTheme.colorScheme.outline,
-                                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        )
-                    }
-
-                    // Seletor de Profissional
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        ExposedDropdownMenuBox(
-                            expanded = showProDropdown,
-                            onExpandedChange = { showProDropdown = !showProDropdown }
-                        ) {
-                            OutlinedTextField(
-                                value = selectedProName,
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("Bloquear para:") },
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showProDropdown) },
-                                modifier = Modifier.fillMaxWidth().menuAnchor(),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface
-                                )
-                            )
-                            ExposedDropdownMenu(
-                                expanded = showProDropdown,
-                                onDismissRequest = { showProDropdown = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("Todo o Salão") },
-                                    onClick = {
-                                        selectedProId = "ALL"
-                                        showProDropdown = false
-                                    }
-                                )
-                                professionals.forEach { pro ->
-                                    DropdownMenuItem(
-                                        text = { Text(pro.name) },
-                                        onClick = {
-                                            selectedProId = pro.id
-                                            showProDropdown = false
-                                        }
+                Tab(
+                    selected = selectedStatusTab == 1,
+                    onClick = { selectedStatusTab = 1 },
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Pendentes", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            if (pendingCount > 0) {
+                                Spacer(Modifier.width(6.dp))
+                                Surface(
+                                    color = Color(0xFFFF9800),
+                                    shape = CircleShape
+                                ) {
+                                    Text(
+                                        text = "$pendingCount",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 10.sp,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
                                     )
                                 }
                             }
                         }
                     }
-
-                    OutlinedTextField(
-                        value = timeStr,
-                        onValueChange = { timeStr = it },
-                        label = { Text("Horário (Ex: 09:30)") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    
-                    OutlinedTextField(
-                        value = reason,
-                        onValueChange = { reason = it },
-                        label = { Text("Motivo / Descrição") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.blockTimeSlot(selectedBlockDate, timeStr, reason, selectedProId, selectedProName)
-                        showBlockDialog = false
+                )
+                Tab(
+                    selected = selectedStatusTab == 2,
+                    onClick = { selectedStatusTab = 2 },
+                    text = {
+                        Text("Cancelados ($cancelledCount)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
-                ) {
-                    Text("Bloquear")
+                )
+            }
+
+            // Visualização da Timeline / Lista
+            DailyTimelineView(
+                appointments = filteredDayAppts,
+                selectedDate = selectedDate,
+                selectedStatusTab = selectedStatusTab,
+                salon = salon,
+                services = services,
+                selectedProfessionalId = selectedProfessionalId,
+                professionals = professionals,
+                onUpdateStatus = { id, s -> viewModel.updateStatus(id, s) },
+                onDeleteBlockage = { viewModel.deleteAppointment(it) },
+                onBlockSlot = { time, proId ->
+                    prefilledBlockTime = time
+                    prefilledBlockProId = proId
+                    showBlockDialog = true
                 }
+            )
+        }
+    }
+
+    // Modal de Calendário Mensal com Marcadores Azuis (Idêntico ao print do Shelton)
+    if (showDatePickerDialog) {
+        MonthCalendarModalDialog(
+            allAppointments = filteredAllAppts,
+            selectedDate = selectedDate,
+            currentMonth = currentMonth,
+            onNavigateMonth = { viewModel.navigateMonth(it) },
+            onDateSelected = {
+                viewModel.onDateSelected(it)
+                showDatePickerDialog = false
             },
-            dismissButton = {
-                TextButton(onClick = { showBlockDialog = false }) {
-                    Text("Cancelar")
-                }
+            onDismiss = { showDatePickerDialog = false }
+        )
+    }
+
+    // Diálogo de Bloqueio de Horário com Recorrência
+    if (showBlockDialog) {
+        BlockSlotWithRecurrenceDialog(
+            initialDate = selectedDate,
+            initialTime = prefilledBlockTime,
+            initialProId = prefilledBlockProId,
+            professionals = professionals,
+            onDismiss = { showBlockDialog = false },
+            onConfirm = { date, time, reason, proId, proName, duration, recurrenceType, count ->
+                viewModel.blockTimeSlot(
+                    date = date,
+                    timeStr = time,
+                    reason = reason,
+                    professionalId = proId,
+                    professionalName = proName,
+                    durationMinutes = duration,
+                    recurrenceType = recurrenceType,
+                    repeatCount = count
+                )
+                showBlockDialog = false
             }
         )
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+// Diálogo Pop-up do Calendário Mensal com Bolinhas Azuis nos Dias com Agendamentos
 @Composable
-fun TimelineView(
+fun MonthCalendarModalDialog(
     allAppointments: List<Appointment>,
-    hasLoyalty: Boolean,
-    onValidateLoyalty: (String) -> Unit,
-    onUpdateStatus: (String, String) -> Unit,
-    onDeleteBlockage: (String) -> Unit
+    selectedDate: Date,
+    currentMonth: Calendar,
+    onNavigateMonth: (Int) -> Unit,
+    onDateSelected: (Date) -> Unit,
+    onDismiss: () -> Unit
 ) {
-    var sortAscending by remember { mutableStateOf(true) }
-    var filterPendingOnly by remember { mutableStateOf(false) }
+    val sdfMonth = SimpleDateFormat("MMMM 'de' yyyy", Locale("pt", "BR"))
 
-    // 1. Filter appointments
-    val filteredAppts = remember(allAppointments, filterPendingOnly) {
-        if (filterPendingOnly) {
-            allAppointments.filter { it.status == "PENDING" }
-        } else {
-            allAppointments
-        }
-    }
-
-    // 2. Sort appointments
-    val sortedAppts = remember(filteredAppts, sortAscending) {
-        if (sortAscending) {
-            filteredAppts.sortedBy { it.date ?: Date(0) }
-        } else {
-            filteredAppts.sortedByDescending { it.date ?: Date(0) }
-        }
-    }
-
-    // 3. Group by Month (using translated String) and then by Day
-    val sdfMonthHeader = SimpleDateFormat("MMMM 'de' yyyy", Locale("pt", "BR"))
-    val sdfDayHeader = SimpleDateFormat("EEEE, dd 'de' MMMM", Locale("pt", "BR"))
-
-    val groupedByMonth = remember(sortedAppts) {
-        val map = LinkedHashMap<String, LinkedHashMap<Date, MutableList<Appointment>>>()
-        for (appt in sortedAppts) {
-            val apptDate = appt.date ?: Date()
-            
-            // Month key
-            val monthCal = Calendar.getInstance().apply {
-                time = apptDate
-                set(Calendar.DAY_OF_MONTH, 1)
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }
-            val monthStr = sdfMonthHeader.format(monthCal.time).replaceFirstChar { it.uppercase() }
-
-            // Day key
-            val dayCal = Calendar.getInstance().apply {
-                time = apptDate
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }
-            val dayDate = dayCal.time
-
-            val daysMap = map.getOrPut(monthStr) { LinkedHashMap() }
-            val list = daysMap.getOrPut(dayDate) { mutableListOf() }
-            list.add(appt)
-        }
-        map
-    }
-
-    Column(modifier = Modifier.fillMaxSize()) {
-        // Filter and Sort controls 🎛️
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            FilterChip(
-                selected = !filterPendingOnly,
-                onClick = { filterPendingOnly = false },
-                label = { Text("Todos") }
-            )
-            FilterChip(
-                selected = filterPendingOnly,
-                onClick = { filterPendingOnly = true },
-                label = { Text("⚠️ Pendentes") }
-            )
-            
-            Spacer(modifier = Modifier.weight(1f))
-            
-            IconButton(
-                onClick = { sortAscending = !sortAscending },
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                ),
-                modifier = Modifier.size(40.dp)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = if (sortAscending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
-                    contentDescription = if (sortAscending) "Mais antigos primeiro" else "Mais recentes primeiro",
-                    modifier = Modifier.size(20.dp)
+                IconButton(onClick = { onNavigateMonth(-1) }) {
+                    Icon(Icons.Default.ChevronLeft, contentDescription = "Mês Anterior")
+                }
+                Text(
+                    text = sdfMonth.format(currentMonth.time).replaceFirstChar { it.uppercase() },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
                 )
+                IconButton(onClick = { onNavigateMonth(1) }) {
+                    Icon(Icons.Default.ChevronRight, contentDescription = "Próximo Mês")
+                }
+            }
+        },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // Dias da semana: Dom, Seg, Ter...
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceAround
+                ) {
+                    listOf("Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb").forEach { day ->
+                        Text(
+                            text = day,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                }
+
+                val cal = (currentMonth.clone() as Calendar).apply {
+                    set(Calendar.DAY_OF_MONTH, 1)
+                }
+                val firstDayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
+                val maxDays = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+
+                val gridItems = mutableListOf<Date?>()
+                for (i in 1 until firstDayOfWeek) {
+                    gridItems.add(null)
+                }
+                for (d in 1..maxDays) {
+                    val c = (currentMonth.clone() as Calendar).apply {
+                        set(Calendar.DAY_OF_MONTH, d)
+                    }
+                    gridItems.add(c.time)
+                }
+
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(7),
+                    modifier = Modifier.fillMaxWidth().height(260.dp)
+                ) {
+                    items(gridItems) { date ->
+                        if (date == null) {
+                            Box(modifier = Modifier.aspectRatio(1f))
+                        } else {
+                            val isSelected = isSameDay(date, selectedDate)
+                            val isToday = isSameDay(date, Date())
+                            val dayAppts = allAppointments.filter { isSameDay(it.date ?: Date(), date) && it.status != "CANCELLED" }
+                            val hasAppointments = dayAppts.isNotEmpty()
+
+                            Box(
+                                modifier = Modifier
+                                    .aspectRatio(1f)
+                                    .padding(2.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (isSelected) MaterialTheme.colorScheme.primary
+                                        else if (isToday) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                                        else Color.Transparent
+                                    )
+                                    .clickable { onDateSelected(date) },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = SimpleDateFormat("d", Locale.getDefault()).format(date),
+                                        fontWeight = if (isSelected || isToday) FontWeight.ExtraBold else FontWeight.Normal,
+                                        fontSize = 13.sp,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                        else if (isToday) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurface
+                                    )
+                                    if (hasAppointments) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(5.dp)
+                                                .clip(CircleShape)
+                                                .background(
+                                                    if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                                    else Color(0xFF1976D2) // Marcador azul estilo Google Calendar / Print
+                                                )
+                                        )
+                                    } else {
+                                        Spacer(Modifier.height(5.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Fechar")
             }
         }
+    )
+}
 
-        if (sortedAppts.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Nenhum agendamento encontrado.", color = MaterialTheme.colorScheme.outline)
+// Timeline Diária de Horários (Inspirada no print do Shelton)
+@Composable
+fun DailyTimelineView(
+    appointments: List<Appointment>,
+    selectedDate: Date,
+    selectedStatusTab: Int,
+    salon: Salon?,
+    services: List<Service>,
+    selectedProfessionalId: String?,
+    professionals: List<Professional>,
+    onUpdateStatus: (String, String) -> Unit,
+    onDeleteBlockage: (String) -> Unit,
+    onBlockSlot: (String, String) -> Unit
+) {
+    val context = LocalContext.current
+    val isToday = remember(selectedDate) { isSameDay(selectedDate, Date()) }
+    val timeSdf = remember { SimpleDateFormat("HH:mm", Locale.US) }
+
+    // Se selecionou a aba de CANCELADOS
+    if (selectedStatusTab == 2) {
+        val cancelledAppts = appointments.filter { it.status == "CANCELLED" }
+        if (cancelledAppts.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+                Text("Nenhum agendamento cancelado para este dia! 👍", color = MaterialTheme.colorScheme.outline)
             }
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
+                contentPadding = PaddingValues(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                groupedByMonth.forEach { (monthStr, daysMap) ->
-                    item {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp)
+                items(cancelledAppts) { appt ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f))
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "${appt.serviceName} (${getFormattedTime(appt.date)})",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp
+                                )
+                                Surface(
+                                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.15f),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        text = if (appt.cancelledBy == "CLIENT") "Cancelado p/ cliente" else "Cancelado p/ salão",
+                                        color = MaterialTheme.colorScheme.error,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text("Cliente: ${appt.clientName}", style = MaterialTheme.typography.bodySmall)
+                            Text("Profissional: ${appt.professionalName.ifBlank { "Salão" }}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                        }
+                    }
+                }
+            }
+        }
+        return
+    }
+
+    // Se selecionou a aba de PENDENTES
+    if (selectedStatusTab == 1) {
+        val pendingAppts = appointments.filter { it.status == "PENDING" }
+        if (pendingAppts.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+                Text("Nenhuma solicitação pendente no momento! 🎉", color = MaterialTheme.colorScheme.outline)
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(pendingAppts) { appt ->
+                    PendingAppointmentCard(
+                        appt = appt,
+                        onAccept = { onUpdateStatus(appt.id, "CONFIRMED") },
+                        onReject = { onUpdateStatus(appt.id, "CANCELLED") }
+                    )
+                }
+            }
+        }
+        return
+    }
+
+    // ABA "TODOS": TIMELINE COMPLETA DE SLOTS
+    val openingTime = salon?.openingTime ?: "08:00"
+    val closingTime = salon?.closingTime ?: "20:00"
+    val interval = if ((salon?.slotIntervalMinutes ?: 30) > 0) salon!!.slotIntervalMinutes else 30
+
+    val timeSlots = remember(openingTime, closingTime, interval) {
+        val list = mutableListOf<String>()
+        try {
+            val start = timeSdf.parse(openingTime) ?: Date()
+            val end = timeSdf.parse(closingTime) ?: Date()
+            val cal = Calendar.getInstance().apply { time = start }
+            while (!cal.time.after(end)) {
+                list.add(timeSdf.format(cal.time))
+                cal.add(Calendar.MINUTE, interval)
+            }
+        } catch (e: Exception) {
+            list.addAll(listOf("08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30", "18:00", "18:30", "19:00", "19:30", "20:00"))
+        }
+        list
+    }
+
+    val currentTimeStr = remember {
+        val nowCal = Calendar.getInstance()
+        String.format(Locale.US, "%02d:%02d", nowCal.get(Calendar.HOUR_OF_DAY), nowCal.get(Calendar.MINUTE))
+    }
+
+    val nonCancelledAppts = remember(appointments) {
+        appointments.filter { it.status != "CANCELLED" }
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        timeSlots.forEach { slotTime ->
+            // Checar se há agendamentos começando neste horário
+            val apptsInSlot = nonCancelledAppts.filter { appt ->
+                getFormattedTime(appt.date) == slotTime
+            }
+
+            // Checar se é horário de almoço fixo do salão
+            val isLunchBreak = salon?.breakStart != null && salon.breakEnd != null &&
+                    slotTime >= salon.breakStart && slotTime < salon.breakEnd
+
+            item(key = slotTime) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // Linha vermelha de "Agora" se estiver no dia de hoje
+                    if (isToday && slotTime == currentTimeStr.take(3) + "00") {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
                         ) {
-                            Text(
-                                text = monthStr,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                            )
+                            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xFFE53935)))
+                            HorizontalDivider(color = Color(0xFFE53935), thickness = 2.dp, modifier = Modifier.weight(1f))
+                            Text("Agora ($currentTimeStr)", color = Color(0xFFE53935), fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp))
                         }
                     }
 
-                    daysMap.forEach { (dayDate, appts) ->
-                        stickyHeader {
-                            Text(
-                                text = sdfDayHeader.format(dayDate).replaceFirstChar { it.uppercase() },
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.secondary,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(MaterialTheme.colorScheme.background)
-                                    .padding(vertical = 4.dp)
-                            )
-                        }
-                        items(appts) { appt ->
-                            AppointmentItem(
-                                appt = appt,
-                                hasLoyalty = hasLoyalty,
-                                onValidateLoyalty = onValidateLoyalty,
-                                onUpdateStatus = onUpdateStatus,
-                                onDeleteBlockage = onDeleteBlockage
-                            )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        // Coluna de Horário na Esquerda (08:00, 08:30...)
+                        Text(
+                            text = slotTime,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.width(46.dp).padding(top = 8.dp)
+                        )
+
+                        Spacer(Modifier.width(8.dp))
+
+                        // Conteúdo do Horário
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            if (apptsInSlot.isNotEmpty()) {
+                                apptsInSlot.forEach { appt ->
+                                    if (appt.status == "BLOCKED") {
+                                        // Bloco de Bloqueio (Almoço, Café, etc.)
+                                        BlockageItemCard(
+                                            appt = appt,
+                                            onDelete = { onDeleteBlockage(appt.id) }
+                                        )
+                                    } else if (appt.status == "PENDING") {
+                                        // Bloco de Pendente
+                                        PendingAppointmentCard(
+                                            appt = appt,
+                                            onAccept = { onUpdateStatus(appt.id, "CONFIRMED") },
+                                            onReject = { onUpdateStatus(appt.id, "CANCELLED") }
+                                        )
+                                    } else {
+                                        // Bloco de Agendamento Confirmado / Ativo (Estilo Shelton: Azul escuro com alto contraste)
+                                        TimelineAppointmentBlock(
+                                            appt = appt,
+                                            onConclude = { onUpdateStatus(appt.id, "SERVED") },
+                                            onCancel = { onUpdateStatus(appt.id, "CANCELLED") }
+                                        )
+                                    }
+                                }
+                            } else if (isLunchBreak) {
+                                // Bloco de Intervalo de Almoço
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth().height(38.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = 10.dp)
+                                    ) {
+                                        Icon(Icons.Default.Restaurant, null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("Intervalo / Almoço", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                                    }
+                                }
+                            } else {
+                                // Horário Livre (Slot fino e discreto)
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(34.dp)
+                                        .clickable { onBlockSlot(slotTime, selectedProfessionalId ?: "ALL") },
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f),
+                                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.padding(horizontal = 10.dp)
+                                    ) {
+                                        Text(
+                                            text = "🟢 Disponível",
+                                            fontSize = 11.sp,
+                                            color = Color(0xFF2E7D32),
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = "+ Bloquear",
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -551,648 +758,416 @@ fun TimelineView(
     }
 }
 
-private data class TimelineItem(
-    val time: String,
-    val appointment: Appointment?,
-    val isBreak: Boolean,
-    val isOutOfWorkingHours: Boolean
-)
+// Bloco de Agendamento Confirmado / Ativo (Alto Contraste Estilo Shelton)
+@Composable
+fun TimelineAppointmentBlock(
+    appt: Appointment,
+    onConclude: () -> Unit,
+    onCancel: () -> Unit
+) {
+    val context = LocalContext.current
+    val isServed = appt.status == "SERVED"
+    val timeRange = remember(appt.date, appt.serviceDurationMinutes) {
+        val startStr = getFormattedTime(appt.date)
+        val cal = Calendar.getInstance().apply { time = appt.date ?: Date() }
+        cal.add(Calendar.MINUTE, if (appt.serviceDurationMinutes > 0) appt.serviceDurationMinutes else 30)
+        val endStr = getFormattedTime(cal.time)
+        "$startStr - $endStr"
+    }
 
-private fun timeToMinutes(timeStr: String): Int? {
-    val parts = timeStr.split(":")
-    if (parts.size != 2) return null
-    val hours = parts[0].trim().toIntOrNull() ?: return null
-    val minutes = parts[1].trim().toIntOrNull() ?: return null
-    return hours * 60 + minutes
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isServed) Color(0xFF2E7D32) else Color(0xFF1565C0) // Azul vibrante de alto contraste
+        )
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Horário de início e fim
+                Text(
+                    text = timeRange,
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp
+                )
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (appt.clientPhone.isNotBlank()) {
+                        IconButton(
+                            onClick = {
+                                val cleanPhone = appt.clientPhone.replace(Regex("[^0-9]"), "")
+                                val intent = Intent(Intent.ACTION_VIEW).apply {
+                                    data = Uri.parse("https://api.whatsapp.com/send?phone=$cleanPhone")
+                                }
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(Icons.Default.Chat, "WhatsApp", tint = Color(0xFF69F0AE), modifier = Modifier.size(16.dp))
+                        }
+                        Spacer(Modifier.width(4.dp))
+                    }
+
+                    if (!isServed) {
+                        IconButton(
+                            onClick = onConclude,
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(Icons.Default.CheckCircle, "Concluir", tint = Color.White, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(2.dp))
+
+            // Nome do Cliente em Destaque
+            Text(
+                text = appt.clientName.ifBlank { "Cliente" },
+                color = Color.White,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 15.sp
+            )
+
+            // Nome do Serviço e Profissional
+            Text(
+                text = "${appt.serviceName} • ${appt.professionalName.ifBlank { "Salão" }}",
+                color = Color.White.copy(alpha = 0.85f),
+                fontSize = 12.sp
+            )
+        }
+    }
+}
+
+// Bloco de Bloqueio (Café ☕, Almoço, etc.)
+@Composable
+fun BlockageItemCard(
+    appt: Appointment,
+    onDelete: () -> Unit
+) {
+    val isLunch = appt.clientName.contains("Almoço", ignoreCase = true)
+    val isCoffee = appt.clientName.contains("Café", ignoreCase = true)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFF37474F) // Grafite escuro elegante
+        )
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = if (isLunch) Icons.Default.Restaurant else if (isCoffee) Icons.Default.Coffee else Icons.Default.Block,
+                    contentDescription = null,
+                    tint = Color(0xFFFFCC80),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Column {
+                    Text(
+                        text = appt.clientName,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                    Text(
+                        text = "${getFormattedTime(appt.date)} (${appt.serviceDurationMinutes} min)",
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 11.sp
+                    )
+                }
+            }
+
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier.size(28.dp)
+            ) {
+                Icon(Icons.Default.Delete, contentDescription = "Excluir Bloqueio", tint = Color(0xFFFF8A80), modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+}
+
+// Card de Agendamento Pendente
+@Composable
+fun PendingAppointmentCard(
+    appt: Appointment,
+    onAccept: () -> Unit,
+    onReject: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)),
+        border = BorderStroke(1.dp, Color(0xFFFF9800))
+    ) {
+        Column(modifier = Modifier.padding(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "⚠️ Solicitação Pendente (${getFormattedTime(appt.date)})",
+                    color = Color(0xFFE65100),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(appt.clientName, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Text("${appt.serviceName} • Profissional: ${appt.professionalName}", style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = onAccept,
+                    modifier = Modifier.weight(1f).height(36.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Aceitar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+                OutlinedButton(
+                    onClick = onReject,
+                    modifier = Modifier.weight(1f).height(36.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Icon(Icons.Default.Cancel, null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Recusar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+// Diálogo de Bloqueio com Recorrência
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BlockSlotWithRecurrenceDialog(
+    initialDate: Date,
+    initialTime: String,
+    initialProId: String,
+    professionals: List<Professional>,
+    onDismiss: () -> Unit,
+    onConfirm: (Date, String, String, String, String, Int, String, Int) -> Unit
+) {
+    val context = LocalContext.current
+    var selectedBlockDate by remember { mutableStateOf(initialDate) }
+    var timeStr by remember { mutableStateOf(initialTime) }
+    var reason by remember { mutableStateOf("Café ☕") }
+    var durationMinutes by remember { mutableIntStateOf(30) }
+    var selectedProId by remember { mutableStateOf(initialProId) }
+    var recurrenceType by remember { mutableStateOf("ONCE") } // ONCE, DAILY, WEEKLY
+    var repeatDaysCount by remember { mutableIntStateOf(30) }
+
+    val selectedProName = remember(selectedProId, professionals) {
+        if (selectedProId == "ALL") "Todo o Salão"
+        else professionals.find { it.id == selectedProId }?.name ?: "Profissional"
+    }
+
+    val dateStr = remember(selectedBlockDate) {
+        SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(selectedBlockDate)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Bloquear Horário na Agenda 🔒", fontWeight = FontWeight.Bold) },
+        text = {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Motivo rápido
+                item {
+                    Text("Motivo do Bloqueio:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf("Café ☕", "Almoço", "Médico", "Outro").forEach { r ->
+                            FilterChip(
+                                selected = reason == r,
+                                onClick = { reason = r },
+                                label = { Text(r, fontSize = 11.sp) }
+                            )
+                        }
+                    }
+                }
+
+                // Data e Horário
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable {
+                                    val c = Calendar.getInstance().apply { time = selectedBlockDate }
+                                    android.app.DatePickerDialog(
+                                        context,
+                                        { _, y, m, d ->
+                                            val newCal = Calendar.getInstance().apply {
+                                                time = selectedBlockDate
+                                                set(Calendar.YEAR, y)
+                                                set(Calendar.MONTH, m)
+                                                set(Calendar.DAY_OF_MONTH, d)
+                                            }
+                                            selectedBlockDate = newCal.time
+                                        },
+                                        c.get(Calendar.YEAR),
+                                        c.get(Calendar.MONTH),
+                                        c.get(Calendar.DAY_OF_MONTH)
+                                    ).show()
+                                }
+                        ) {
+                            OutlinedTextField(
+                                value = dateStr,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Data") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        OutlinedTextField(
+                            value = timeStr,
+                            onValueChange = { timeStr = it },
+                            label = { Text("Hora (HH:mm)") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                // Duração
+                item {
+                    Text("Duração:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(15 to "15m", 30 to "30m", 60 to "1h", 120 to "2h").forEach { (d, label) ->
+                            FilterChip(
+                                selected = durationMinutes == d,
+                                onClick = { durationMinutes = d },
+                                label = { Text(label, fontSize = 11.sp) }
+                            )
+                        }
+                    }
+                }
+
+                // Recorrência (Pedido expresso do Shelton: "bloquear nos próximos 100 dias")
+                item {
+                    Text("Repetir Bloqueio:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        FilterChip(
+                            selected = recurrenceType == "ONCE",
+                            onClick = { recurrenceType = "ONCE" },
+                            label = { Text("Apenas hoje", fontSize = 11.sp) }
+                        )
+                        FilterChip(
+                            selected = recurrenceType == "DAILY",
+                            onClick = { recurrenceType = "DAILY" },
+                            label = { Text("Diariamente", fontSize = 11.sp) }
+                        )
+                        FilterChip(
+                            selected = recurrenceType == "WEEKLY",
+                            onClick = { recurrenceType = "WEEKLY" },
+                            label = { Text("Toda semana", fontSize = 11.sp) }
+                        )
+                    }
+                }
+
+                if (recurrenceType != "ONCE") {
+                    item {
+                        Text(
+                            text = if (recurrenceType == "DAILY") "Repetir por quantos dias?" else "Repetir por quantas semanas?",
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            if (recurrenceType == "DAILY") {
+                                listOf(7, 30, 60, 100).forEach { count ->
+                                    FilterChip(
+                                        selected = repeatDaysCount == count,
+                                        onClick = { repeatDaysCount = count },
+                                        label = { Text("$count dias", fontSize = 11.sp) }
+                                    )
+                                }
+                            } else {
+                                listOf(4, 8, 12, 16).forEach { count ->
+                                    FilterChip(
+                                        selected = repeatDaysCount == count,
+                                        onClick = { repeatDaysCount = count },
+                                        label = { Text("$count semanas", fontSize = 11.sp) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onConfirm(
+                        selectedBlockDate,
+                        timeStr,
+                        reason,
+                        selectedProId,
+                        selectedProName,
+                        durationMinutes,
+                        recurrenceType,
+                        repeatDaysCount
+                    )
+                }
+            ) {
+                Text("Confirmar Bloqueio")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+private fun isSameDay(date1: Date, date2: Date): Boolean {
+    val cal1 = Calendar.getInstance().apply { time = date1 }
+    val cal2 = Calendar.getInstance().apply { time = date2 }
+    return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
+            cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)
 }
 
 private fun getFormattedTime(date: Date?): String {
     if (date == null) return ""
     val c = Calendar.getInstance().apply { time = date }
     return String.format(Locale.US, "%02d:%02d", c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE))
-}
-
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable
-fun AgendaListView(
-    appointments: List<Appointment>,
-    selectedDate: Date,
-    title: String,
-    hasLoyalty: Boolean,
-    salon: com.example.agendei_pro.core.model.Salon?,
-    services: List<com.example.agendei_pro.core.model.Service>,
-    selectedProfessionalId: String?,
-    professionals: List<com.example.agendei_pro.core.model.Professional>,
-    onValidateLoyalty: (String) -> Unit,
-    onUpdateStatus: (String, String) -> Unit,
-    onDeleteBlockage: (String) -> Unit,
-    onBlockSlot: (String, String) -> Unit
-) {
-    val sdf = SimpleDateFormat("EEEE, dd 'de' MMMM", Locale("pt", "BR"))
-    var showFullTimeline by remember { mutableStateOf(true) }
-
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "${title} - ${sdf.format(selectedDate).replaceFirstChar { it.uppercase() }}",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.secondary,
-                modifier = Modifier.weight(1f)
-            )
-            
-            FilterChip(
-                selected = showFullTimeline,
-                onClick = { showFullTimeline = !showFullTimeline },
-                label = { Text("Linha do Tempo") }
-            )
-        }
-        
-        if (!showFullTimeline || salon == null) {
-            if (appointments.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Sem compromissos nesta data.", color = MaterialTheme.colorScheme.outline)
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(appointments) { 
-                        AppointmentItem(
-                            appt = it,
-                            hasLoyalty = hasLoyalty,
-                            onValidateLoyalty = onValidateLoyalty,
-                            onUpdateStatus = onUpdateStatus,
-                            onDeleteBlockage = onDeleteBlockage
-                        )
-                    }
-                }
-            }
-        } else {
-            // Generate full timeline
-            val dayCal = Calendar.getInstance().apply { time = selectedDate }
-            val dayOfWeek = dayCal.get(Calendar.DAY_OF_WEEK)
-            val workingDays = if (selectedProfessionalId != null && salon.isConfigurationIndividualized) {
-                val pro = professionals.find { it.id == selectedProfessionalId }
-                if (pro?.hasCustomSchedule == true) pro.workingDays else salon.workingDays
-            } else salon.workingDays
-            
-            val isWorkDay = workingDays.contains(dayOfWeek)
-            
-            if (!isWorkDay) {
-                Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-                    Text("Este dia não é de expediente para o profissional/salão.", color = MaterialTheme.colorScheme.outline, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                }
-            } else {
-                val timeSdf = SimpleDateFormat("HH:mm", Locale.US)
-                val startTimeStr = if (selectedProfessionalId != null && salon.isConfigurationIndividualized) {
-                    val pro = professionals.find { it.id == selectedProfessionalId }
-                    if (pro?.hasCustomSchedule == true) pro.openingTime else salon.openingTime
-                } else salon.openingTime
-                
-                val endTimeStr = if (selectedProfessionalId != null && salon.isConfigurationIndividualized) {
-                    val pro = professionals.find { it.id == selectedProfessionalId }
-                    if (pro?.hasCustomSchedule == true) pro.closingTime else salon.closingTime
-                } else salon.closingTime
-
-                val interval = if (salon.slotIntervalMinutes > 0) salon.slotIntervalMinutes else 30
-
-                val timelineItems = remember(selectedDate, appointments, selectedProfessionalId, salon, services, professionals) {
-                    val list = mutableListOf<TimelineItem>()
-                    try {
-                        val startTime = timeSdf.parse(startTimeStr) ?: return@remember emptyList()
-                        val endTime = timeSdf.parse(endTimeStr) ?: return@remember emptyList()
-                        
-                        val cal = Calendar.getInstance()
-                        cal.time = startTime
-                        while (cal.time.before(endTime)) {
-                            val slotTimeStr = timeSdf.format(cal.time)
-                            val slotMin = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
-                            
-                            val isBreak = if (selectedProfessionalId != null && salon.isConfigurationIndividualized) {
-                                val pro = professionals.find { it.id == selectedProfessionalId }
-                                if (pro?.hasCustomSchedule == true) {
-                                    val brStartMin = pro.breakStart?.let { timeToMinutes(it) }
-                                    val brEndMin = pro.breakEnd?.let { timeToMinutes(it) }
-                                    brStartMin != null && brEndMin != null && slotMin >= brStartMin && slotMin < brEndMin
-                                } else {
-                                    val brStartMin = salon.breakStart?.let { timeToMinutes(it) }
-                                    val brEndMin = salon.breakEnd?.let { timeToMinutes(it) }
-                                    brStartMin != null && brEndMin != null && slotMin >= brStartMin && slotMin < brEndMin
-                                }
-                            } else {
-                                val brStartMin = salon.breakStart?.let { timeToMinutes(it) }
-                                val brEndMin = salon.breakEnd?.let { timeToMinutes(it) }
-                                brStartMin != null && brEndMin != null && slotMin >= brStartMin && slotMin < brEndMin
-                            }
-                            
-                            val appt = appointments.find { appt ->
-                                val apptDate = appt.date ?: return@find false
-                                val apptCal = Calendar.getInstance().apply { time = apptDate }
-                                val apptStartMin = apptCal.get(Calendar.HOUR_OF_DAY) * 60 + apptCal.get(Calendar.MINUTE)
-                                val durationMin = if (appt.serviceId == "BLOCKAGE") interval else {
-                                    services.find { it.id == appt.serviceId }?.durationMinutes ?: 30
-                                }
-                                val apptEndMin = apptStartMin + durationMin
-                                slotMin >= apptStartMin && slotMin < apptEndMin
-                            }
-                            
-                            list.add(TimelineItem(slotTimeStr, appt, isBreak, false))
-                            cal.add(Calendar.MINUTE, interval)
-                        }
-                    } catch(e: Exception) {}
-                    list
-                }
-
-                if (timelineItems.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Configuração de horários inválida.", color = MaterialTheme.colorScheme.outline)
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(timelineItems) { item ->
-                            if (item.isBreak) {
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                                ) {
-                                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Text(item.time, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.outline)
-                                        Spacer(modifier = Modifier.width(16.dp))
-                                        Text("☕ Intervalo / Almoço", color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodyMedium)
-                                    }
-                                }
-                            } else if (item.appointment != null) {
-                                val isStart = item.time == getFormattedTime(item.appointment.date)
-                                if (isStart) {
-                                    AppointmentItem(
-                                        appt = item.appointment,
-                                        hasLoyalty = hasLoyalty,
-                                        onValidateLoyalty = onValidateLoyalty,
-                                        onUpdateStatus = onUpdateStatus,
-                                        onDeleteBlockage = onDeleteBlockage
-                                    )
-                                } else {
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = CardDefaults.cardColors(
-                                            containerColor = if (item.appointment.status == "BLOCKED") 
-                                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
-                                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
-                                        )
-                                    ) {
-                                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            Text(
-                                                item.time, 
-                                                fontWeight = FontWeight.Bold, 
-                                                color = if (item.appointment.status == "BLOCKED") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline
-                                            )
-                                            Spacer(modifier = Modifier.width(16.dp))
-                                            val occupancyText = if (item.appointment.status == "BLOCKED") {
-                                                "🔒 Ocupado (Ausência/Bloqueio)"
-                                            } else {
-                                                "⏳ Em andamento: ${item.appointment.serviceName} (${item.appointment.clientName})"
-                                            }
-                                            Text(
-                                                occupancyText, 
-                                                color = if (item.appointment.status == "BLOCKED") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline, 
-                                                style = MaterialTheme.typography.bodyMedium
-                                            )
-                                        }
-                                    }
-                                }
-                            } else {
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9).copy(alpha = 0.6f)),
-                                    border = BorderStroke(1.dp, Color(0xFFC8E6C9))
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(item.time, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
-                                            Spacer(modifier = Modifier.width(16.dp))
-                                            Text("🟢 Disponível", color = Color(0xFF2E7D32), fontWeight = FontWeight.SemiBold)
-                                        }
-                                        TextButton(
-                                            onClick = { onBlockSlot(item.time, selectedProfessionalId ?: "ALL") },
-                                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                                        ) {
-                                            Icon(Icons.Default.Block, null, modifier = Modifier.size(16.dp))
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text("Bloquear", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun MonthlyCalendarView(
-    allAppointments: List<Appointment>,
-    selectedDate: Date,
-    currentMonth: Calendar,
-    onNavigateMonth: (Int) -> Unit,
-    onDateSelected: (Date) -> Unit
-) {
-    val sdfMonth = SimpleDateFormat("MMMM yyyy", Locale("pt", "BR"))
-
-    Column {
-        // Month Navigation Header 📅
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = { onNavigateMonth(-1) }) {
-                Icon(Icons.Default.ChevronLeft, contentDescription = "Mês Anterior")
-            }
-            
-            Text(
-                text = sdfMonth.format(currentMonth.time).replaceFirstChar { it.uppercase() },
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            
-            IconButton(onClick = { onNavigateMonth(1) }) {
-                Icon(Icons.Default.ChevronRight, contentDescription = "Próximo Mês")
-            }
-        }
-
-        // Days of week header (Dom, Seg, Ter...)
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceAround
-        ) {
-            listOf("Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb").forEach { day ->
-                Text(
-                    text = day,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.outline
-                )
-            }
-        }
-
-        // Days grid aligned to weekday
-        val cal = (currentMonth.clone() as Calendar).apply {
-            set(Calendar.DAY_OF_MONTH, 1)
-        }
-        val firstDayOfWeek = cal.get(Calendar.DAY_OF_WEEK) // 1 = Sunday, 2 = Monday...
-        val maxDays = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
-
-        val gridItems = mutableListOf<Date?>()
-        for (i in 1 until firstDayOfWeek) {
-            gridItems.add(null)
-        }
-        for (d in 1..maxDays) {
-            val c = (currentMonth.clone() as Calendar).apply {
-                set(Calendar.DAY_OF_MONTH, d)
-            }
-            gridItems.add(c.time)
-        }
-
-        LazyVerticalGrid(columns = GridCells.Fixed(7), modifier = Modifier.padding(horizontal = 8.dp)) {
-            items(gridItems) { date ->
-                if (date == null) {
-                    Box(modifier = Modifier.aspectRatio(1f))
-                } else {
-                    val dayAppts = allAppointments.filter { isSameDay(it.date ?: Date(), date) }
-                    val confirmed = dayAppts.count { it.status == "CONFIRMED" }
-                    val pending = dayAppts.count { it.status == "PENDING" }
-                    val isSelected = isSameDay(date, selectedDate)
-
-                    Box(
-                        modifier = Modifier
-                            .aspectRatio(1f)
-                            .padding(2.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                            .clickable { onDateSelected(date) },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = SimpleDateFormat("dd", Locale.getDefault()).format(date),
-                                fontWeight = FontWeight.Bold,
-                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            if (dayAppts.isNotEmpty()) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    if (confirmed > 0) Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF2E7D32))) // Verde escuro
-                                    if (pending > 0) Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFFFBC02D))) // Amarelo escuro
-                                }
-                            } else {
-                                Box(Modifier.height(6.dp))
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun AppointmentItem(
-    appt: Appointment,
-    hasLoyalty: Boolean,
-    onValidateLoyalty: (String) -> Unit,
-    onUpdateStatus: (String, String) -> Unit,
-    onDeleteBlockage: (String) -> Unit
-) {
-    val context = LocalContext.current
-    val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(appt.date ?: Date())
-    val isPending = appt.status == "PENDING"
-    val isBlocked = appt.status == "BLOCKED"
-    val isConfirmed = appt.status == "CONFIRMED"
-    val isServed = appt.status == "SERVED"
-    val isCancelled = appt.status == "CANCELLED"
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (isCancelled) Modifier.alpha(0.5f) else Modifier),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isBlocked) {
-                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
-            } else if (isPending) {
-                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)
-            } else if (isCancelled) {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-            } else if (isServed) {
-                Color(0xFFE8F5E9)
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant
-            }
-        ),
-        border = if (isPending) BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)) else null
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = time,
-                fontWeight = FontWeight.ExtraBold,
-                style = MaterialTheme.typography.titleLarge,
-                color = if (isBlocked) {
-                    MaterialTheme.colorScheme.error
-                } else if (isPending) {
-                    MaterialTheme.colorScheme.error
-                } else if (isCancelled) {
-                    MaterialTheme.colorScheme.outline
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
-            )
-            
-            Spacer(Modifier.width(16.dp))
-            
-            Column(Modifier.weight(1f)) {
-                if (isBlocked) {
-                    Text(
-                        text = "🔒 Horário Bloqueado",
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 2.dp)
-                    )
-                    Text(appt.clientName, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.error)
-                } else {
-                    if (isPending) {
-                        Text(
-                            text = "⚠️ Aguardando Confirmação",
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(bottom = 2.dp)
-                        )
-                    }
-                    Text(
-                        text = appt.clientName,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        style = if (isCancelled) androidx.compose.ui.text.TextStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough) else androidx.compose.ui.text.TextStyle.Default
-                    )
-                    val detailsText = if (appt.professionalName.isNotBlank()) {
-                        "${appt.serviceName} • com ${appt.professionalName}"
-                    } else {
-                        appt.serviceName
-                    }
-                    Text(detailsText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-
-                    if (isServed) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Surface(
-                            color = Color(0xFFE8F5E9),
-                            contentColor = Color(0xFF2E7D32),
-                            shape = RoundedCornerShape(4.dp)
-                        ) {
-                            Text(
-                                text = "✓ Prestado",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    } else if (isCancelled) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Surface(
-                            color = Color(0xFFFFEBEE),
-                            contentColor = Color(0xFFC62828),
-                            shape = RoundedCornerShape(4.dp)
-                        ) {
-                            val cancelText = when (appt.cancelledBy) {
-                                "SALON" -> "✗ Cancelado pelo Salão"
-                                "CLIENT" -> "✗ Cancelado pelo Cliente"
-                                else -> "✗ Cancelado"
-                            }
-                            Text(
-                                text = cancelText,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    } else if (appt.loyaltyRedeemed) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Surface(
-                            color = Color(0xFFFFF9C4),
-                            contentColor = Color(0xFFF57F17),
-                            shape = RoundedCornerShape(4.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.CardGiftcard,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(11.dp),
-                                    tint = Color(0xFFF57F17)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(
-                                    text = "Cortesia Fidelidade (Grátis)",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                            }
-                        }
-                    } else if (isConfirmed && hasLoyalty) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        if (appt.loyaltyValidated) {
-                            Surface(
-                                color = Color(0xFFE8F5E9),
-                                contentColor = Color(0xFF2E7D32),
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(
-                                    text = "✓ Fidelidade Concedida",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                        } else {
-                            Surface(
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(
-                                    text = "Fidelidade Pendente",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-            
-            if (!isBlocked && !isCancelled && appt.clientPhone.isNotBlank()) {
-                IconButton(onClick = {
-                    try {
-                        val cleanPhone = appt.clientPhone.replace(Regex("[^0-9]"), "")
-                        val timeStr = SimpleDateFormat("HH:mm", Locale.getDefault()).format(appt.date ?: Date())
-                        val dateStr = SimpleDateFormat("dd/MM", Locale.getDefault()).format(appt.date ?: Date())
-                        val text = "Olá ${appt.clientName}! Passando para lembrar do seu agendamento de *${appt.serviceName}* no dia *$dateStr* às *$timeStr*. Nos vemos lá!"
-                        val urlEncoded = java.net.URLEncoder.encode(text, "UTF-8")
-                        val intent = Intent(Intent.ACTION_VIEW).apply {
-                            data = Uri.parse("https://api.whatsapp.com/send?phone=$cleanPhone&text=$urlEncoded")
-                        }
-                        context.startActivity(intent)
-                    } catch (e: Exception) {}
-                }) {
-                    Icon(
-                        imageVector = Icons.Default.Chat,
-                        contentDescription = "Lembrete WhatsApp",
-                        tint = Color(0xFF25D366)
-                    )
-                }
-                Spacer(Modifier.width(8.dp))
-            }
-            
-            if (isBlocked) {
-                IconButton(onClick = { onDeleteBlockage(appt.id) }) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Desbloquear Horário",
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
-            } else if (isPending) {
-                IconButton(
-                    onClick = { onUpdateStatus(appt.id, "CONFIRMED") },
-                    modifier = Modifier
-                        .background(Color(0xFF2E7D32), CircleShape)
-                        .size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = "Confirmar Agendamento",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            } else if (isConfirmed) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    if (hasLoyalty && !appt.loyaltyValidated) {
-                        Button(
-                            onClick = { onValidateLoyalty(appt.id) },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF2E7D32),
-                                contentColor = Color.White
-                            ),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Text("Validar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-
-                    IconButton(
-                        onClick = { onUpdateStatus(appt.id, "SERVED") },
-                        modifier = Modifier
-                            .background(Color(0xFF2E7D32), CircleShape)
-                            .size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Concluir Atendimento",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    IconButton(
-                        onClick = { onUpdateStatus(appt.id, "CANCELLED") },
-                        modifier = Modifier
-                            .background(MaterialTheme.colorScheme.error, CircleShape)
-                            .size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Cancelar Agendamento",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-fun isSameDay(d1: Date, d2: Date): Boolean {
-    val cal1 = Calendar.getInstance().apply { time = d1 }
-    val cal2 = Calendar.getInstance().apply { time = d2 }
-    return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
-           cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)
 }
